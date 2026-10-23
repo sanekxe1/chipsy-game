@@ -408,7 +408,7 @@ function buildSprites() {
     '...wwwwwwwwwww..',
   ], { o: '#8a6d3b' })];
 
-  // ---------- Враги: Чипс ----------
+  // ---------- Враги: Чипс (все смотрят влево, навстречу коту) ----------
   const VAC = [
     '..........kkkk....',
     '.........k....k...',
@@ -423,98 +423,94 @@ function buildSprites() {
     mk(VAC.concat(['.xx.......xx..kkkk', '.xx.......xx......']), {}, { flip: true }),
     mk(VAC.concat(['.xx.......xx..kkkk', '..xx.......xx.....']), {}, { flip: true }),
   ];
-  en.hose = [mk([
-    '.......mm.......',
-    '.......mm.......',
-    '.......nn.......',
-    '......nnnn......',
-    '..nnnnnNNnnnn...',
-    '.nNNNNNNNNNNNn..',
-    'nNnnnnnnnnnnnNn.',
-    'nNnNNNNNNNNNnNn.',
-    '.nNnnnnnnnnnNn..',
-    '..nnnnnnnnnnn...',
-  ])];
-  en.cucumber = [mk([
-    '..nnnnnnnnnnnnn...',
-    '.nNnnNnnnNnnnNnn..',
-    'nnnnnnnnnnnnnnnnn.',
-    'nnNnnnnNnnnnnNnnnn',
-    '.nnnnnnnnnnnnnnnn.',
-    '..nnnnnnnnnnnnnn..',
-  ], { n: '#4fae3a', N: '#2e7a24' })];
+  const DOG = [
+    '.OO.................',
+    'OoOO................',
+    '.oooo...............',
+    'oOkoooo.............',
+    'xoooooorr...........',
+    '.owwoooorooooooooo.O',
+    '..ooooorroooooooooOo',
+    '...oooooooooooooooO.',
+    '...ooooooooooooooo..',
+  ];
+  const dogPal = { o: '#b5793f', O: '#6e4220', r: '#e33b2e' };
+  en.dog = [
+    mk(DOG.concat(['...oo.oo.....oo.oo..', '..oo...oo...oo...oo.']), dogPal),
+    mk(DOG.concat(['....oo.oo...oo.oo...', '....oo.oo...oo.oo...']), dogPal),
+  ];
+  const clipPal = { r: '#ff7b1c' };
   en.clipper = [
     mk([
-      'mm..........mm',
-      '.mm........mm.',
-      '..mm......mm..',
-      '...mm....mm...',
-      '....mmmmmm....',
-      '...rr.mm.rr...',
-      '..rrrr..rrrr..',
-      '..rr.r..r.rr..',
-      '..rrrr..rrrr..',
-    ]),
+      'mm................',
+      '.mmm..............',
+      '...mmm.....rrrr...',
+      '.....mmmk.rr..rr..',
+      '.......kk..rrrr...',
+      '.....mmmk..rrrr...',
+      '...mmm....rr..rr..',
+      '.mmm.......rrrr...',
+      'mm................',
+    ], clipPal),
     mk([
-      '..............',
-      '..............',
-      '.mmmmmmmmmmm..',
-      '..mmmmmmmmmm..',
-      '....mmmmmm....',
-      '...rr.mm.rr...',
-      '..rrrr..rrrr..',
-      '..rr.r..r.rr..',
-      '..rrrr..rrrr..',
-    ]),
+      '..................',
+      '..................',
+      '...........rrrr...',
+      'mmmmmmmmk.rr..rr..',
+      '.mmmmmmkk..rrrr...',
+      'mmmmmmmmk..rrrr...',
+      '..........rr..rr..',
+      '...........rrrr...',
+      '..................',
+    ], clipPal),
   ];
-  en.spray = [mk([
-    '.kkkkkkk.',
-    'kkkkkkkkk',
-    '...kk.k..',
-    '...mm....',
-    '..cccc...',
-    '.cwcccc..',
-    '.cwcccc..',
-    '.ccccccc.',
-    '.cwcccc..',
-    '.ccccccc.',
-    '.cccccc..',
-    '.cccccc..',
-    '..cccc...',
-  ], { c: '#59b8f5' }, { flip: true })];
-  en.carrier = [
-    mk([
-      '......xxxxxx......',
-      '.....x......x.....',
-      'oooooooooooooooooo',
-      'oOOOOOOOOOOOOOOOOo',
-      'oOxxxxxooooooooOOo',
-      'oOx.x.xooooooooOOo',
-      'oOxxxxxooooooooOOo',
-      'oOx.x.xooooooooOOo',
-      'oOxxxxxooooooooOOo',
-      'oOOOOOOOOOOOOOOOOo',
-      'oooooooooooooooooo',
-      '..kk..........kk..',
-    ], { o: '#7d8bd6', O: '#5563a8' }),
+  const PILL = [
+    '..rrrrrwwwwww...',
+    '.rrrrrrwwwwwww..',
+    'rrkrrkrwwwwwwmw.',
+    'rrrrrrrwwwwwwww.',
+    'rrkkkrrwwwwmwww.',
+    '.rrrrrrwwwwwww..',
+    '..rrrrrwwwwww...',
   ];
-  en.carrier.push(en.carrier[0]);
+  en.pill = [mk(PILL), mk(PILL.map(r => r.replace(/m/g, 'w')))];
+  const DRYER = [
+    '.....mmmmmmmmm....',
+    '....mvvvvvvvvvm...',
+    'mmmmvvwkvvvvvvvm..',
+    'kmmmvvvvvvvvvvvm..',
+    'mmmmvvvvvvvvvvm...',
+    '....mvvvvvvvvm....',
+    '.......mvvvm......',
+    '.......mvvvm......',
+    '.......mvvvm......',
+    '......mmmmmmm.....',
+  ];
+  en.blower = [mk(DRYER, { v: '#d36fd1' }), mk(DRYER.map((r, i) => (i === 2 ? r.replace('wk', 'kk') : r)), { v: '#d36fd1' })];
+  en.fountain = [mk([
+    '.......mm.......',
+    '......mccm......',
+    '.....mmmmmm.....',
+    '..mmmmmmmmmmmm..',
+    '.mccccccccccccm.',
+    'mMMMMMMMMMMMMMMm',
+  ], { c: '#59b8f5' })];
+  SPR.duck = mk([
+    '...yy.....',
+    '..yyky....',
+    '..yyyyoo..',
+    'yy.yyy....',
+    'yyyyyyyy..',
+    '.yyyyyy...',
+  ], { o: '#ff7b1c' });
 
-  // ---------- Тайлы ----------
-  const tilePal = { a: '#8be45f', n: '#4cbf34', N: '#2f8a2a', o: '#b0603a', O: '#7d3b1f', l: '#c97a4f' };
+  // ---------- Тайлы трёх миров: Волга (Саша), Город (Соня), Квартира (Чипс) ----------
+  const noOut = { outline: false };
   const dirt = [
     'oooooooooooooooo', 'ooOooooooooOoooo', 'oooooooOoooooooo', 'oooooooooooooooo',
     'oOoooooooooooOoo', 'ooooolooooOooooo', 'oooooooooooooooo', 'oooOooooooooOooo',
   ];
-  SPR.ground = mk([
-    'aaaaaaaaaaaaaaaa',
-    'aannaaannnaaanna',
-    'nnnnnnnnnnnnnnnn',
-    'nNnnnNnnnnNnnnNn',
-    'NNnNNNNnNNNNnNNN',
-    'oNoooNoooNooooNo',
-  ].concat(dirt, dirt, ['oooOoooooooooOoo', 'oooooooooooooooo']), tilePal, { outline: false });
-  SPR.brick = mk([
+  const BRICK = [
     'lllllllllllllllO',
     'OoooooooOooooooo',
     'OoooooooOooooooo',
@@ -523,15 +519,47 @@ function buildSprites() {
     'ooooOoooooooOooo',
     'ooooOoooooooOooo',
     'OOOOOOOOOOOOOOOO',
-    'OlllllllOlllllll',
-    'OoooooooOooooooo',
-    'OoooooooOooooooo',
-    'OOOOOOOOOOOOOOOO',
-    'llllOlllllllOlll',
-    'ooooOoooooooOooo',
-    'ooooOoooooooOooo',
-    'OOOOOOOOOOOOOOOO',
-  ], { o: '#d2663f', O: '#7a2e14', l: '#f39a72' }, { outline: false });
+  ];
+  const brick = pal => mk(BRICK.concat(BRICK), pal, noOut);
+  const grassPal = { a: '#8be45f', n: '#4cbf34', N: '#2f8a2a', o: '#b0603a', O: '#7d3b1f', l: '#c97a4f' };
+  const boardPal = { l: '#e6c493', t: '#c9a26b', T: '#8a6a43', k: '#3a2b20', B: '#2d5f8a', b: '#3f78a8', O: '#5a4632', w: '#9fd0f0' };
+  const woodPal = { l: '#f0b97a', o: '#d08b4c', O: '#94582a', T: '#6e3f1c' };
+  const WATER = ['BBBOOBBBBBBOOBBB', 'BbBOOBBBbBBOOBBB', 'BBBOOBBBBBBOOBbB', 'BBBOOBwBBBBOOBBB'];
+  const PLANKS = ['oooooooOoooooooo', 'oooooooOoooooooo', 'oooooooOoooooooo', 'OOOOOOOOOOOOOOOO',
+    'oooOoooooooooooo', 'oooOoooooooooooo', 'oooOoooooooooooo', 'OOOOOOOOOOOOOOOO'];
+  SPR.world = {
+    volga: {
+      top: mk(['aaaaaaaaaaaaaaaa', 'aannaaannnaaanna', 'nnnnnnnnnnnnnnnn', 'nNnnnNnnnnNnnnNn', 'NNnNNNNnNNNNnNNN', 'oNoooNoooNooooNo',
+        'oooooooooooooooo', 'ooOooooooooOoooo', 'oooooooOoooooooo', 'oooooooooooooooo'].concat(dirt.slice(2)), grassPal, noOut),
+      fill: mk(dirt.concat(dirt), grassPal, noOut),
+      brick: brick({ o: '#d2663f', O: '#7a2e14', l: '#f39a72' }),
+    },
+    city: {
+      top: mk(['llllllllllllllll', 'tttttttTtttttttt', 'tttTtttTtttTtttt', 'TTTTTTTTTTTTTTTT', 'kkkkkkkkkkkkkkkk', 'OOOOOOOOOOOOOOOO']
+        .concat(WATER, WATER, WATER.slice(0, 2)), boardPal, noOut),
+      fill: mk(WATER.concat(WATER, WATER, WATER), boardPal, noOut),
+      brick: brick({ o: '#a7a39b', O: '#5f5b55', l: '#cfcbc3' }),
+    },
+    flat: {
+      top: mk(['llllllllllllllll'].concat(PLANKS, PLANKS.slice(0, 7)), woodPal, noOut),
+      fill: mk(PLANKS.concat(PLANKS), { o: '#a86a36', O: '#6e3f1c' }, noOut),
+      brick: brick({ o: '#b9773e', O: '#6e4220', l: '#dca46a' }),
+    },
+  };
+  SPR.plank = mk(['tttttttttttttttt', 'TTTTTTTTTTTTTTTT', '.T..........T...', '.T..........T...']);
+  SPR.mover = mk(['cccccccccccccccc', 'bbbbbbbbbbbbbbbb', '.k....k....k....'], { c: '#9fd0f0', b: '#3f78a8' });
+  SPR.spring = [
+    mk(['.rrrrrrrrrrrrrr.', 'rwwrrrrrrrrrrrrr', '.RRRRRRRRRRRRRR.', '...m.m.m.m.m.m..', '..m.m.m.m.m.m...', '...m.m.m.m.m.m..', '.xxxxxxxxxxxxxx.']),
+    mk(['.rrrrrrrrrrrrrr.', 'rwwrrrrrrrrrrrrr', '.RRRRRRRRRRRRRR.', '..mmmmmmmmmmmm..', '.xxxxxxxxxxxxxx.']),
+  ];
+  SPR.bowl = mk([
+    '....oOoooOoo....',
+    '..ooOooOoooOoo..',
+    'rrrrrrrrrrrrrrrr',
+    '.rrwrrrrrrrrrrr.',
+    '..rrrrrrrrrrrr..',
+    '...RRRRRRRRRR...',
+  ], { o: '#b5651d', O: '#7a3e12' });
   const qRows = glyph => [
     'kkkkkkkkkkkkkkkk',
     'klllllllllllllYk',

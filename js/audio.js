@@ -115,6 +115,23 @@ const Sound = (() => {
         ['C5', 'G5', 'C6'].forEach((n, i) => tone('square', f(n), null, t + i * 0.08, 0.1, 0.16));
         break;
       case 'click': tone('square', 700, 900, t, 0.05, 0.12); break;
+      case 'bark':
+        [0, 0.16].forEach(d => { tone('sawtooth', 380, 180, t + d, 0.1, 0.25); noise(t + d, 0.08, 0.3, 700); });
+        break;
+      case 'spring': tone('square', 200, 900, t, 0.25, 0.2); break;
+      case 'break':
+        noise(t, 0.18, 0.6, 1200, null, 0.6);
+        tone('square', 300, 60, t, 0.15, 0.2);
+        break;
+      case 'checkpoint':
+        ['E5', 'A5'].forEach((n, i) => tone('square', f(n), null, t + i * 0.1, 0.12, 0.16));
+        break;
+      case 'win':
+        ['C5', 'E5', 'G5', 'C6', 'G5', 'C6', 'E6'].forEach((n, i) => {
+          tone('square', f(n), null, t + i * 0.12, 0.14, 0.16);
+          tone('triangle', f(n) / 2, null, t + i * 0.12, 0.14, 0.3);
+        });
+        break;
     }
   }
 

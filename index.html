@@ -7,51 +7,80 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div id="app">
 
   <!-- Главное меню сборника -->
   <section id="scr-menu" class="screen active">
-    <div class="topbar">
-      <button class="btn small" id="btn-sound">ЗВУК: ВКЛ</button>
+    <canvas id="menu-scene" width="320" height="64"></canvas>
+    <div class="menu-row">
+      <div class="menu-left">
+        <h1 class="title"><span>ЧИПСЫ</span><span>МОЯ ЖИЗНЬ</span></h1>
+        <p class="subtitle">сборник мини-игр</p>
+        <button class="btn small" id="btn-sound">ЗВУК: ВКЛ</button>
+      </div>
+      <div class="tiles">
+        <button class="tile" id="tile-chips">
+          <canvas id="tile-icon" width="14" height="16"></canvas>
+          <span class="tile-name">ХОЧУ ЧИПСОВ</span>
+          <span class="tile-desc">уровни и бесконечный забег</span>
+        </button>
+        <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
+      </div>
     </div>
-    <h1 class="title"><span>ЧИПСЫ</span><span>МОЯ ЖИЗНЬ</span></h1>
-    <p class="subtitle">сборник мини-игр</p>
-    <div class="tiles">
-      <button class="tile" id="tile-chips">
-        <canvas id="tile-icon" width="14" height="16"></canvas>
-        <span class="tile-name">ХОЧУ ЧИПСОВ</span>
-        <span class="tile-desc">беги от лавины дедлайнов</span>
-      </button>
-      <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
-      <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
-    </div>
-    <canvas id="menu-scene" width="200" height="64"></canvas>
   </section>
 
   <!-- Выбор героя -->
   <section id="scr-select" class="screen">
-    <div class="topbar">
-      <button class="btn small" id="sel-back">НАЗАД</button>
+    <div class="bar">
+      <button class="btn small back" data-back="menu">НАЗАД</button>
+      <h2 class="h2">ВЫБЕРИ ГЕРОЯ</h2>
     </div>
-    <h2 class="h2">ВЫБЕРИ ГЕРОЯ</h2>
-    <div class="heroes" id="heroes"></div>
+    <div class="cards" id="heroes"></div>
+  </section>
+
+  <!-- Выбор режима -->
+  <section id="scr-mode" class="screen">
+    <div class="bar">
+      <button class="btn small back" data-back="select">НАЗАД</button>
+      <h2 class="h2" id="mode-title">САША</h2>
+    </div>
+    <div class="mode-row">
+      <canvas id="mode-hero" width="30" height="25"></canvas>
+      <div class="mode-buttons">
+        <button class="mode-btn" id="m-levels">
+          <span class="mode-name">УРОВНИ</span>
+          <span class="mode-desc" id="m-levels-desc">★ 0 из 12</span>
+        </button>
+        <button class="mode-btn red" id="m-endless">
+          <span class="mode-name">БЕСКОНЕЧНЫЙ ЗАБЕГ</span>
+          <span class="mode-desc" id="m-endless-desc">рекорд: 0</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Список уровней -->
+  <section id="scr-levels" class="screen">
+    <div class="bar">
+      <button class="btn small back" data-back="mode">НАЗАД</button>
+      <h2 class="h2" id="levels-title">УРОВНИ</h2>
+    </div>
+    <div class="cards" id="levels"></div>
   </section>
 
   <!-- Игра -->
   <section id="scr-game" class="screen">
-    <div id="stage">
-      <canvas id="cv"></canvas>
-      <button class="btn small" id="btn-pause">II</button>
-    </div>
+    <div id="stage"><canvas id="cv"></canvas></div>
+    <button class="btn small" id="btn-pause">II</button>
     <div id="controls">
       <div class="pad">
         <button class="ctl arrow left" id="b-left" aria-label="Назад"></button>
         <button class="ctl arrow right" id="b-right" aria-label="Вперёд"></button>
       </div>
-      <button class="ctl jump" id="b-jump"><span></span>ПРЫЖОК</button>
+      <button class="ctl jump" id="b-jump" aria-label="Прыжок"><span></span></button>
     </div>
 
     <div class="overlay" id="ov-pause">
@@ -59,12 +88,12 @@
         <h2 class="h2">ПАУЗА</h2>
         <button class="btn" id="p-resume">ПРОДОЛЖИТЬ</button>
         <button class="btn" id="p-sound">ЗВУК: ВКЛ</button>
-        <button class="btn red" id="p-menu">В МЕНЮ</button>
+        <button class="btn red" id="p-menu">ВЫЙТИ</button>
       </div>
     </div>
 
     <div class="overlay" id="ov-over">
-      <div class="panel">
+      <div class="panel wide">
         <h2 class="h2">ИГРА ОКОНЧЕНА</h2>
         <div class="newrec" id="o-new">НОВЫЙ РЕКОРД!</div>
         <div class="stats">
@@ -73,16 +102,44 @@
           <div><span id="o-item-label">ЧИПСЫ</span><b id="o-items">0</b></div>
           <div><span>ДИСТАНЦИЯ</span><b id="o-dist">0 м</b></div>
         </div>
-        <button class="btn" id="o-again">ЕЩЁ РАЗ</button>
-        <button class="btn" id="o-heroes">СМЕНИТЬ ГЕРОЯ</button>
+        <div class="btn-row">
+          <button class="btn" id="o-again">ЕЩЁ РАЗ</button>
+          <button class="btn" id="o-back">ВЫЙТИ</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="ov-level">
+      <div class="panel wide">
+        <h2 class="h2" id="l-title">УРОВЕНЬ ПРОЙДЕН!</h2>
+        <div class="stars" id="l-stars"></div>
+        <div class="stats">
+          <div><span>ВРЕМЯ</span><b id="l-time">0:00</b></div>
+          <div><span id="l-item-label">ЧИПСЫ</span><b id="l-items">0/0</b></div>
+        </div>
+        <p class="hint" id="l-hint"></p>
+        <div class="btn-row">
+          <button class="btn" id="l-next">ДАЛЬШЕ</button>
+          <button class="btn" id="l-again">ЕЩЁ РАЗ</button>
+          <button class="btn" id="l-list">УРОВНИ</button>
+        </div>
       </div>
     </div>
   </section>
+
+  <!-- Просьба повернуть телефон -->
+  <div id="rotate">
+    <canvas id="rotate-cat" width="18" height="14"></canvas>
+    <div class="phone"></div>
+    <p>ПОВЕРНИ ТЕЛЕФОН</p>
+  </div>
 </div>
 
-<script src="js/audio.js?v=1"></script>
-<script src="js/sprites.js?v=1"></script>
-<script src="js/game.js?v=1"></script>
-<script src="js/main.js?v=1"></script>
+<script src="js/audio.js?v=2"></script>
+<script src="js/sprites.js?v=2"></script>
+<script src="js/worlds.js?v=2"></script>
+<script src="js/levels.js?v=2"></script>
+<script src="js/game.js?v=2"></script>
+<script src="js/main.js?v=2"></script>
 </body>
 </html>
