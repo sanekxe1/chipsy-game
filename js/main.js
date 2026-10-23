@@ -22,7 +22,7 @@
     if (tgVer('6.1') && tg.HapticFeedback) safe(() => tg.HapticFeedback.impactOccurred(type));
   };
 
-  const ITEM_NAMES = { chipsPack: 'ЧИПСЫ', kibble: 'КОРМ' };
+  const ITEM_NAMES = { chip: 'ЧИПСЫ', kibble: 'КОРМ' };
   const HERO_INFO = {
     sasha: 'Мир: Волга<br>Бустер: мотоцикл',
     sonya: 'Мир: Город<br>Бустер: энергетик',
@@ -112,7 +112,7 @@
     c.drawImage(SPR.bushes[1], 270, gy - SPR.bushes[1].height + 1);
     for (let x = 0; x < cv.width; x += 16) c.drawImage(SPR.world.volga.top, x, gy);
     c.drawImage(SPR.q[0], 132, gy - 46);
-    c.drawImage(SPR.chipsPack, 137, gy - 62);
+    c.drawImage(SPR.chip, 136, gy - 58);
     c.drawImage(SPR.sasha.run[0], 100, gy - SPR.sasha.run[0].height + 1);
     c.drawImage(SPR.sonya.run[1], 118, gy - SPR.sonya.run[1].height + 1);
     c.drawImage(SPR.chips.run[0], 160, gy - SPR.chips.run[0].height + 1);

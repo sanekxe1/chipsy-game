@@ -71,44 +71,96 @@ const Worlds = (() => {
     });
   }
 
+  // ---------- смена дня и ночи в городе ----------
+  const CYCLE = 90; // секунд на полный круг: день → закат → ночь → рассвет
+  const SKIES = {
+    day: ['#5fb8ef', '#73c4f2', '#8ccff4', '#a6daf6', '#bfe4f8', '#d6eef9'],
+    sunset: ['#5b4f8f', '#7d5f9c', '#b46e9e', '#e48a98', '#f7a98a', '#ffc98a'],
+    night: ['#0f1030', '#141640', '#1b1e50', '#22265c', '#2a2f68', '#343a74'],
+    dawn: ['#4a5a9c', '#7a7ab8', '#c08ab0', '#f0a8a0', '#ffd0a0', '#ffe6b8'],
+  };
+  // [доля круга, небо, темнота 0..1]
+  const STOPS = [[0, 'day', 0], [0.3, 'day', 0], [0.42, 'sunset', 0.5], [0.52, 'night', 1], [0.8, 'night', 1], [0.9, 'dawn', 0.4], [1, 'day', 0]];
+  const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const mix = (a, b, k) => {
+    const x = hex(a), y = hex(b);
+    return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(',') + ')';
+  };
+  function timeOfDay(t) {
+    const ph = (t / CYCLE) % 1;
+    let i = 0;
+    while (STOPS[i + 1][0] < ph) i++;
+    const [p0, s0, d0] = STOPS[i], [p1, s1, d1] = STOPS[i + 1];
+    const k = p1 > p0 ? (ph - p0) / (p1 - p0) : 0;
+    return { ph, dark: d0 + (d1 - d0) * k, sky: SKIES[s0].map((col, j) => mix(col, SKIES[s1][j], k)) };
+  }
+
   function city(c) {
     const { ctx, W, gy, t } = c;
-    bands(ctx, W, ['#5b4f8f', '#7d5f9c', '#b46e9e', '#e48a98', '#f7a98a', '#ffc98a'], -4, gy);
-    // солнце
-    const sx = Math.round(W * 0.72 - c.camX * 0.03 % (W + 80));
-    ctx.fillStyle = '#ffe9a8';
-    ctx.beginPath(); ctx.arc(sx, gy - 62, 22, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff6d6';
-    ctx.beginPath(); ctx.arc(sx, gy - 62, 16, 0, Math.PI * 2); ctx.fill();
-    // дальние дома с окнами
+    const tod = timeOfDay(t), d = tod.dark;
+    bands(ctx, W, tod.sky, -4, gy);
+    // звёзды ночью
+    if (d > 0.6) {
+      ctx.globalAlpha = (d - 0.6) / 0.4;
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 40; i++) ctx.fillRect(Math.floor(hash(i + 50) * W), Math.floor(hash(i + 90) * (gy - 70)), 1, 1);
+      ctx.globalAlpha = 1;
+    }
+    // солнце садится и встаёт, ночью — луна
+    const sx = Math.round(W * 0.7);
+    let sunY = null;
+    if (tod.ph < 0.5) sunY = gy - 125 + Math.pow(tod.ph / 0.5, 2) * 115;
+    else if (tod.ph > 0.85) sunY = gy - 10 - (tod.ph - 0.85) / 0.15 * 115;
+    if (sunY !== null) {
+      ctx.fillStyle = mix('#fff6c0', '#ff9a50', d * 1.6 > 1 ? 1 : d * 1.6);
+      ctx.beginPath(); ctx.arc(sx, sunY, 16, 0, Math.PI * 2); ctx.fill();
+    }
+    if (d > 0.7) {
+      ctx.globalAlpha = (d - 0.7) / 0.3;
+      ctx.fillStyle = '#f4f1d0';
+      ctx.beginPath(); ctx.arc(W * 0.25, gy - 112, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = tod.sky[0];
+      ctx.beginPath(); ctx.arc(W * 0.25 + 5, gy - 115, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // дальние дома: окна зажигаются к вечеру и горят ровно (без мигания)
+    const houseCol = d < 0.5 ? mix('#8a9bb8', '#6c4f7c', d * 2) : mix('#6c4f7c', '#2a2440', (d - 0.5) * 2);
     layer(c, 0.15, 34, (i, x) => {
       const h = 40 + Math.floor(hash(i) * 60), w = 26 + Math.floor(hash(i + 2) * 10);
-      ctx.fillStyle = '#6c4f7c';
+      ctx.fillStyle = houseCol;
       ctx.fillRect(x, gy - h, w, h);
-      ctx.fillStyle = '#ffd27a';
+      let k = 0;
       for (let wy = gy - h + 5; wy < gy - 8; wy += 8) {
-        for (let wx = x + 4; wx < x + w - 4; wx += 7) if (hash(wx * 3 + wy) > 0.6) ctx.fillRect(wx, wy, 3, 3);
+        for (let wx = x + 4; wx < x + w - 4; wx += 7, k++) {
+          const lit = hash(i * 97 + k) < d * 0.75;
+          ctx.fillStyle = lit ? '#ffd27a' : (d < 0.3 ? '#9fb6d6' : 'rgba(0,0,0,0.15)');
+          ctx.fillRect(wx, wy, 3, 3);
+        }
       }
     });
     // бетонные башни-элеваторы, как на фото Сони
     layer(c, 0.35, 170, (i, x) => {
       if (hash(i + 4) < 0.25) return;
       const h = 90 + Math.floor(hash(i + 9) * 40);
-      ctx.fillStyle = '#b8b0a3';
+      ctx.fillStyle = mix('#c9c2b6', '#4f4a55', d);
       ctx.fillRect(x, gy - h, 70, h);
-      ctx.fillStyle = '#d6d0c4';
+      ctx.fillStyle = mix('#e0dacf', '#5d5862', d);
       ctx.fillRect(x + 6, gy - h + 6, 58, h * 0.45);
-      ctx.fillStyle = '#8e877b';
+      ctx.fillStyle = mix('#9a9387', '#3a3640', d);
       for (let k = 0; k < 4; k++) ctx.fillRect(x + k * 22, gy - h, 6, h);
-      ctx.fillStyle = '#c9805a';
+      ctx.fillStyle = mix('#c9805a', '#6a4a40', d);
       ctx.fillRect(x + 30, gy - h + 10, 3, 14);
     });
-    // фонари на набережной
+    // фонари на набережной загораются в темноте
     layer(c, 0.7, 120, (i, x) => {
       ctx.fillStyle = '#2f2538';
       ctx.fillRect(x, gy - 46, 2, 46);
       ctx.fillRect(x - 3, gy - 48, 8, 3);
-      ctx.fillStyle = Math.floor(t * 2 + i) % 7 ? '#ffe9a8' : '#fff6d6';
+      if (d > 0.35) {
+        ctx.fillStyle = 'rgba(255,233,168,' + ((d - 0.35) * 0.5).toFixed(2) + ')';
+        ctx.beginPath(); ctx.arc(x + 1, gy - 44, 12, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = d > 0.35 ? '#fff1b8' : '#8a8f99';
       ctx.fillRect(x - 2, gy - 45, 6, 3);
     });
   }

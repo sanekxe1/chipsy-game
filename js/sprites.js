@@ -196,7 +196,7 @@ function buildSprites() {
       '............',
     ],
   };
-  const longHair = rows => rows.map((r, i) => (i < 5 ? '.hh' + r.slice(3) : r));
+  const longHair = rows => rows.map((r, i) => (i < 1 ? '.hh' + r.slice(3) : r));
   const sashaPal = { h: '#6b4428', c: '#ffffff', j: '#22284a', p: '#7d6b3c', P: '#4d4426', x: '#2a2a33' };
   const sonyaPal = { h: '#2a1f22', q: '#c9a03a', Q: '#946f1c', c: '#ffffff', j: '#1f1f2b', p: '#7b8496', o: '#c9a26b', r: '#c0606a' };
 
@@ -269,6 +269,18 @@ function buildSprites() {
     'rrrrrrrrrr',
     '.yyyyyyyy.',
   ], { o: '#f5b041', O: '#c47c1a' });
+  // одна чипсина — то, что собирают Саша и Соня
+  SPR.chip = mk([
+    '....yyyy...',
+    '..yyylyyy..',
+    '.yylyyyYyy.',
+    'yyyyyYyyyyy',
+    'yYyyyyyyYyy',
+    'yyyyyyYyyy.',
+    '.yyYyyyyyy.',
+    '..yyyyyy...',
+    '....yyy....',
+  ], { y: '#ffcf4a', Y: '#d9901c', l: '#fff3b0' });
   SPR.kibble = mk([
     '..oo..',
     '.oOoo.',
@@ -276,34 +288,37 @@ function buildSprites() {
     '.oOoo.',
     '..oo..',
   ], { o: '#b5651d', O: '#7a3e12' });
+  // тёмная банка энергетика с оранжевой полосой и молнией
   SPR.energy = mk([
-    '.mmmm.',
-    'xxxxxx',
-    'xrrrrx',
-    'xryyrx',
-    'xrryrx',
-    'xryyrx',
-    'xrryrx',
-    'xryrrx',
-    'xrrrrx',
-    'xxxxxx',
-    '.mmmm.',
-  ], { x: '#1f1f2b', r: '#ff5a1f' });
+    '.mmmmm.',
+    'xxxxxxx',
+    'xrrrrrx',
+    'xxxxyxx',
+    'xxxyyxx',
+    'xxyyyyx',
+    'xxxyyxx',
+    'xxxyxxx',
+    'xxxxxxx',
+    'xrrrrrx',
+    'xxxxxxx',
+    '.mmmmm.',
+  ], { x: '#24222e', r: '#ff6a1f', y: '#ffd23f' });
   SPR.motoIcon = mk(MOTO.slice(10).map(r => r.replace(/[hcspoeS]/g, '.')), motoPal);
+  // пёрышко
   SPR.feather = mk([
-    'o.........',
-    '.o........',
-    '..o.......',
-    '...o......',
-    '....o.....',
-    '.....k....',
-    '.....k....',
-    '....vpv...',
-    '...vppv...',
-    '...vpv....',
-    '...pv.....',
-    '...v......',
-  ], { o: '#d9a35b', v: '#8a5cf0', p: '#ff8fd1' });
+    '.......vv',
+    '......vpv',
+    '.....vppv',
+    '....vpppv',
+    '...vpppv.',
+    '...vppv..',
+    '..vppv...',
+    '..vpv....',
+    '.vpv.....',
+    '.vv......',
+    '.w.......',
+    'w........',
+  ], { v: '#8a5cf0', p: '#ff8fd1' });
   SPR.heart = mk(['.rr.rr.', 'rrrrrrr', 'rwrrrrr', '.rrrrr.', '..rrr..', '...r...']);
   SPR.heartEmpty = mk(['.mm.mm.', 'mmmmmmm', 'mmmmmmm', '.mmmmm.', '..mmm..', '...m...'], { m: '#5b5466' });
 

@@ -19,11 +19,11 @@ const Game = (() => {
   const H = 180, GROUND_Y = H - 32;
 
   const CHARS = {
-    sasha: { name: 'Саша', item: 'chipsPack', boost: 'motoIcon', jump: 330, theme: 'work', world: 'volga', w: 10, h: 18, boostText: 'МОТОЦИКЛ!' },
-    sonya: { name: 'Соня', item: 'chipsPack', boost: 'energy', jump: 330, theme: 'work', world: 'city', w: 10, h: 18, boostText: 'АДРЕНАЛИН!' },
+    sasha: { name: 'Саша', item: 'chip', boost: 'motoIcon', jump: 330, theme: 'work', world: 'volga', w: 10, h: 18, boostText: 'МОТОЦИКЛ!' },
+    sonya: { name: 'Соня', item: 'chip', boost: 'energy', jump: 330, theme: 'work', world: 'city', w: 10, h: 18, boostText: 'АДРЕНАЛИН!' },
     chips: { name: 'Чипс', item: 'kibble', boost: 'feather', jump: 395, theme: 'cat', world: 'flat', w: 14, h: 10, boostText: 'ПЁРЫШКО!' },
   };
-  const ITEM_SIZE = { chipsPack: { w: 10, h: 12 }, kibble: { w: 8, h: 7 } };
+  const ITEM_SIZE = { chip: { w: 11, h: 9 }, kibble: { w: 8, h: 7 } };
 
   // kind: walker — идёт, hopper — прыгает, flyer — летит волной, static — стоит,
   //       sprayer — бьёт струёй воды вверх, blower — фен, сдувает назад
@@ -989,7 +989,7 @@ const Game = (() => {
   return {
     init, startEndless, startLevel, stop, pause, resume, layout, setSafe, input, CHARS,
     // для отладки из консоли: Game.debug.spawn('dog'), Game.debug.boost()
-    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; } },
+    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; } },
     set onGameOver(fn) { onOver = fn; },
     set onLevelEnd(fn) { onLevelEnd = fn; },
     get running() { return running; },
