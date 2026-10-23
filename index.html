@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Чипсы моя жизнь</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div id="app">
+
+  <!-- Главное меню сборника -->
+  <section id="scr-menu" class="screen active">
+    <div class="topbar">
+      <button class="btn small" id="btn-sound">ЗВУК: ВКЛ</button>
+    </div>
+    <h1 class="title"><span>ЧИПСЫ</span><span>МОЯ ЖИЗНЬ</span></h1>
+    <p class="subtitle">сборник мини-игр</p>
+    <div class="tiles">
+      <button class="tile" id="tile-chips">
+        <canvas id="tile-icon" width="14" height="16"></canvas>
+        <span class="tile-name">ХОЧУ ЧИПСОВ</span>
+        <span class="tile-desc">беги от лавины дедлайнов</span>
+      </button>
+      <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
+      <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
+    </div>
+    <canvas id="menu-scene" width="200" height="64"></canvas>
+  </section>
+
+  <!-- Выбор героя -->
+  <section id="scr-select" class="screen">
+    <div class="topbar">
+      <button class="btn small" id="sel-back">НАЗАД</button>
+    </div>
+    <h2 class="h2">ВЫБЕРИ ГЕРОЯ</h2>
+    <div class="heroes" id="heroes"></div>
+  </section>
+
+  <!-- Игра -->
+  <section id="scr-game" class="screen">
+    <div id="stage">
+      <canvas id="cv"></canvas>
+      <button class="btn small" id="btn-pause">II</button>
+    </div>
+    <div id="controls">
+      <div class="pad">
+        <button class="ctl arrow left" id="b-left" aria-label="Назад"></button>
+        <button class="ctl arrow right" id="b-right" aria-label="Вперёд"></button>
+      </div>
+      <button class="ctl jump" id="b-jump"><span></span>ПРЫЖОК</button>
+    </div>
+
+    <div class="overlay" id="ov-pause">
+      <div class="panel">
+        <h2 class="h2">ПАУЗА</h2>
+        <button class="btn" id="p-resume">ПРОДОЛЖИТЬ</button>
+        <button class="btn" id="p-sound">ЗВУК: ВКЛ</button>
+        <button class="btn red" id="p-menu">В МЕНЮ</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="ov-over">
+      <div class="panel">
+        <h2 class="h2">ИГРА ОКОНЧЕНА</h2>
+        <div class="newrec" id="o-new">НОВЫЙ РЕКОРД!</div>
+        <div class="stats">
+          <div><span>ОЧКИ</span><b id="o-score">0</b></div>
+          <div><span>РЕКОРД</span><b id="o-best">0</b></div>
+          <div><span id="o-item-label">ЧИПСЫ</span><b id="o-items">0</b></div>
+          <div><span>ДИСТАНЦИЯ</span><b id="o-dist">0 м</b></div>
+        </div>
+        <button class="btn" id="o-again">ЕЩЁ РАЗ</button>
+        <button class="btn" id="o-heroes">СМЕНИТЬ ГЕРОЯ</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="js/audio.js?v=1"></script>
+<script src="js/sprites.js?v=1"></script>
+<script src="js/game.js?v=1"></script>
+<script src="js/main.js?v=1"></script>
+</body>
+</html>
