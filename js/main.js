@@ -39,10 +39,12 @@
   function onOrientation() {
     if (isPortrait()) {
       if (current === 'game') doPause();
+      if (current === 'toly-game') tolyPause();
     } else if (mobileTg && tgVer('8.0')) {
       safe(() => tg.lockOrientation());
     }
     if (Game.running) Game.layout(false);
+    if (Toly.running) Toly.layout(false);
   }
   window.addEventListener('resize', onOrientation);
 
@@ -50,11 +52,13 @@
   function readSafe() {
     const cs = getComputedStyle(document.documentElement);
     const px = n => parseFloat(cs.getPropertyValue(n)) || 0;
-    Game.setSafe({
+    const s = {
       top: px('--tg-safe-area-inset-top') + px('--tg-content-safe-area-inset-top'),
       left: px('--tg-safe-area-inset-left'),
       right: px('--tg-safe-area-inset-right'),
-    });
+    };
+    Game.setSafe(s);
+    Toly.setSafe(Object.assign({}, s));
   }
   if (tg && tg.onEvent) {
     safe(() => tg.onEvent('safeAreaChanged', readSafe));
@@ -71,6 +75,7 @@
     if (name === 'select') renderHeroes();
     if (name === 'mode') renderMode();
     if (name === 'levels') renderLevels();
+    if (name === 'toly') renderToly();
     if (tgVer('6.1')) safe(() => (name === 'menu' ? tg.BackButton.hide() : tg.BackButton.show()));
   }
 
@@ -85,6 +90,10 @@
     else if (current === 'game') {
       if (overlayOpen()) exitGame();
       else doPause();
+    } else if (current === 'toly') show('menu');
+    else if (current === 'toly-game') {
+      if (overlayOpen()) tolyExit();
+      else tolyPause();
     }
   }
   if (tgVer('6.1')) safe(() => tg.BackButton.onClick(goBack));
@@ -118,6 +127,7 @@
     c.drawImage(SPR.chips.run[0], 160, gy - SPR.chips.run[0].height + 1);
     c.drawImage(SPR.kibble, 182, gy - 10);
     drawInto($('#tile-icon'), SPR.chipsPack, null);
+    drawInto($('#tile-toly-icon'), TSPR.granta, null);
     drawInto($('#rotate-cat'), SPR.chips.run[0], null);
   }
 
@@ -196,6 +206,53 @@
     });
   }
 
+  // ---------- Тольяттинская суета ----------
+  function renderToly() {
+    $('#toly-desc').textContent = 'рекорд: ' + Toly.Rec.get() + ' · монет: ' + Toly.Rec.coins();
+    const cv = $('#toly-hero'), c = cv.getContext('2d');
+    c.imageSmoothingEnabled = false;
+    c.fillStyle = '#5cae3c'; c.fillRect(0, 0, cv.width, cv.height);
+    c.fillStyle = '#4a4a52'; c.fillRect(22, 0, 22, cv.height);
+    c.fillStyle = '#f2f2f2'; for (let y = 1; y < cv.height; y += 8) c.fillRect(32, y, 1, 4);
+    c.drawImage(TSPR.savely, 5, cv.height - TSPR.savely.height - 2);
+    c.drawImage(TSPR.granta, 24, 2);
+  }
+
+  function tolyStart() {
+    Sound.init();
+    hideOverlays();
+    show('toly-game');
+    readSafe();
+    Toly.start();
+  }
+  function tolyPause() {
+    if (Toly.pause()) { updateSoundLabels(); $('#t-ov-pause').classList.add('show'); }
+  }
+  function tolyExit() {
+    Toly.stop();
+    hideOverlays();
+    show('toly');
+  }
+  Toly.init($('#cv2'), $('#stage2'));
+  Toly.onGameOver = r => {
+    $('#t-score').textContent = r.score;
+    $('#t-best').textContent = r.best;
+    $('#t-coins').textContent = r.coins;
+    $('#t-dist').textContent = r.dist + ' м';
+    $('#t-scr').textContent = r.scrapes;
+    $('#t-new').classList.toggle('show', r.isNew);
+    $('#t-total').textContent = 'Монет всего: ' + r.total;
+    $('#t-ov-over').classList.add('show');
+    if (r.isNew) window.haptic('heavy');
+  };
+  $('#tile-toly').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('toly'); });
+  $('#toly-go').addEventListener('click', tolyStart);
+  $('#t-pause').addEventListener('click', tolyPause);
+  $('#t-resume').addEventListener('click', () => { $('#t-ov-pause').classList.remove('show'); Toly.resume(); });
+  $('#t-exit').addEventListener('click', tolyExit);
+  $('#t-again').addEventListener('click', tolyStart);
+  $('#t-back').addEventListener('click', tolyExit);
+
   // ---------- Игра ----------
   function enterGame() {
     Sound.init();
@@ -271,11 +328,13 @@
     const txt = 'ЗВУК: ' + (Sound.enabled ? 'ВКЛ' : 'ВЫКЛ');
     $('#btn-sound').textContent = txt;
     $('#p-sound').textContent = txt;
+    $('#t-sound').textContent = txt;
   }
   const toggleSound = () => { Sound.init(); Sound.toggle(); Sound.play('click'); updateSoundLabels(); };
 
   $('#btn-sound').addEventListener('click', toggleSound);
   $('#p-sound').addEventListener('click', toggleSound);
+  $('#t-sound').addEventListener('click', toggleSound);
   $('#tile-chips').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('select'); });
   $('#m-levels').addEventListener('click', () => { Sound.play('click'); show('levels'); });
   $('#m-endless').addEventListener('click', startEndless);
@@ -295,16 +354,17 @@
   $('#l-list').addEventListener('click', exitGame);
 
   // Удержание экранных кнопок (мультитач: можно держать «вперёд» и жать прыжок)
-  function hold(el, key) {
+  function hold(el, key, inp) {
+    inp = inp || Game.input;
     const on = e => {
       e.preventDefault();
-      if (key === 'jump' && !Game.input.jump) Game.input.jumpBuf = 0.12;
-      Game.input[key] = true;
+      if (key === 'jump' && !inp.jump) inp.jumpBuf = 0.12;
+      inp[key] = true;
       el.classList.add('down');
     };
     const off = e => {
       e.preventDefault();
-      Game.input[key] = false;
+      inp[key] = false;
       el.classList.remove('down');
     };
     el.addEventListener('pointerdown', on);
@@ -316,10 +376,18 @@
   hold($('#b-left'), 'left');
   hold($('#b-right'), 'right');
   hold($('#b-jump'), 'jump');
+  hold($('#t-left'), 'left', Toly.input);
+  hold($('#t-right'), 'right', Toly.input);
 
   // Клавиатура (для ПК / Telegram Desktop)
   const KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', Space: 'jump', ArrowUp: 'jump', KeyW: 'jump' };
   window.addEventListener('keydown', e => {
+    if (current === 'toly-game') {
+      if (e.code === 'Escape' || e.code === 'KeyP') { tolyPause(); return; }
+      const k = KEYS[e.code];
+      if (k === 'left' || k === 'right') { e.preventDefault(); Toly.input[k] = true; }
+      return;
+    }
     if (current !== 'game') return;
     if (e.code === 'Escape' || e.code === 'KeyP') { doPause(); return; }
     let k = KEYS[e.code];
@@ -332,11 +400,16 @@
   window.addEventListener('keyup', e => {
     let k = KEYS[e.code];
     if (!k) return;
+    if (k === 'left' || k === 'right') Toly.input[k] = false;
     if (swapped && k !== 'jump') k = k === 'left' ? 'right' : 'left';
     Game.input[k] = false;
   });
 
-  document.addEventListener('visibilitychange', () => { if (document.hidden && current === 'game') doPause(); });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) return;
+    if (current === 'game') doPause();
+    if (current === 'toly-game') tolyPause();
+  });
 
   updateSoundLabels();
   drawMenuScene();

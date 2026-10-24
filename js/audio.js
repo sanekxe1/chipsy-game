@@ -5,8 +5,9 @@ const Sound = (() => {
   let enabled = true;
   try { enabled = localStorage.getItem('chips_sound') !== 'off'; } catch (e) { /* нет доступа */ }
 
-  let musicOn = false, nextTime = 0, step = 0, timer = 0;
-  const STEP = 60 / 152 / 2; // восьмые ноты
+  let musicOn = false, nextTime = 0, step = 0, timer = 0, track = 'chips';
+  const STEP = 60 / 152 / 2; // восьмые ноты (мелодия «Хочу чипсов»)
+  const RACE_STEP = 60 / 160 / 4; // шестнадцатые (гоночная тема «Тольяттинской суеты»)
 
   const NOTES = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
   const f = name => {
@@ -26,6 +27,15 @@ const Sound = (() => {
     'G5 - D5 - B4 D5 G5 -'
   ).split(' ');
   const BASS = ['C3', 'A2', 'F2', 'G2', 'C3', 'A2', 'F2', 'G2'];
+
+  // Гоночная тема: ля минор, Am–F–G–E, 4 такта по 16 шестнадцатых, '.' — пауза
+  const RACE_LEAD = (
+    'A4 . A4 C5 . E5 . A5 . G5 . E5 D5 . E5 . ' +
+    'F4 . F4 A4 . C5 . F5 . E5 . C5 A4 . C5 . ' +
+    'G4 . G4 B4 . D5 . G5 . F5 . D5 B4 . D5 . ' +
+    'E5 . E5 . G#5 . E5 . B4 . D5 . E5 . . .'
+  ).split(' ');
+  const RACE_ROOTS = ['A2', 'F2', 'G2', 'E2'];
 
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -121,6 +131,17 @@ const Sound = (() => {
       case 'spring': tone('square', 200, 900, t, 0.25, 0.2); break;
       case 'jump2': tone('square', 400, 900, t, 0.12, 0.2); break;
       case 'tick': tone('square', 880, null, t, 0.08, 0.18); break;
+      case 'go': tone('square', 1320, null, t, 0.3, 0.2); tone('square', 660, null, t, 0.3, 0.12); break;
+      case 'coin': tone('square', 988, null, t, 0.05, 0.14); tone('square', 1319, null, t + 0.05, 0.12, 0.14); break;
+      case 'screech':
+        noise(t, 0.3, 0.35, 3500, null, 4);
+        tone('sawtooth', 900, 600, t, 0.25, 0.06);
+        break;
+      case 'crash':
+        noise(t, 0.6, 0.8, 600, null, 0.5);
+        noise(t + 0.05, 0.4, 0.5, 2500, null, 0.8);
+        tone('sawtooth', 160, 40, t, 0.6, 0.3);
+        break;
       case 'swap':
         tone('sawtooth', 300, 600, t, 0.15, 0.2);
         tone('sawtooth', 600, 300, t + 0.15, 0.15, 0.2);
@@ -141,8 +162,24 @@ const Sound = (() => {
     }
   }
 
+  function raceStep() {
+    const i = step % 64, bar = i >> 4, s16 = i % 16;
+    const m = RACE_LEAD[i];
+    if (m !== '.') tone('square', f(m), null, nextTime, RACE_STEP * 1.6, 0.13, musicGain);
+    // «едущий» бас: шестнадцатые с октавными скачками
+    const root = f(RACE_ROOTS[bar]);
+    tone('square', s16 % 4 === 2 ? root * 2 : root, null, nextTime, RACE_STEP * 0.8, 0.07, musicGain);
+    tone('triangle', root, null, nextTime, RACE_STEP * 0.9, 0.3, musicGain);
+    if (s16 === 0 || s16 === 6 || s16 === 8) tone('sine', 150, 40, nextTime, 0.12, 0.7, musicGain);
+    if (s16 === 4 || s16 === 12) noise(nextTime, 0.1, 0.3, 1700, musicGain, 0.7);
+    if (s16 % 2 === 0) noise(nextTime, 0.03, 0.1, 9000, musicGain, 1.5);
+    nextTime += RACE_STEP;
+    step++;
+  }
+
   function schedule() {
     while (nextTime < ctx.currentTime + 0.15) {
+      if (track === 'race') { raceStep(); continue; }
       const i = step % 64, bar = i >> 3;
       const m = MEL[i];
       if (m !== '-') tone('square', f(m), null, nextTime, STEP * 0.9, 0.16, musicGain);
@@ -156,8 +193,13 @@ const Sound = (() => {
     }
   }
 
-  function startMusic() {
-    if (!ctx || musicOn) return;
+  function startMusic(name) {
+    if (!ctx) return;
+    name = name || 'chips';
+    if (musicOn && name === track) return;
+    if (musicOn) stopMusic();
+    if (name !== track) step = 0;
+    track = name;
     musicOn = true;
     nextTime = ctx.currentTime + 0.1;
     schedule();

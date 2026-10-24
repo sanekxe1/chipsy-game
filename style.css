@@ -243,3 +243,21 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .use input { width: 18px; height: 18px; accent-color: var(--yellow); margin: 0; }
 .use b { color: var(--yellow); font-weight: normal; }
 .use.off { opacity: 0.5; pointer-events: none; }
+
+/* ---------- Тольяттинская суета ---------- */
+.tile.red { background: #ff6a5a; box-shadow: inset -4px -4px 0 var(--red-d), inset 4px 4px 0 #ff9d92, 0 5px 0 var(--ink); }
+.tile.red .tile-desc { color: #5a1410; }
+#toly-hero { width: 44vh; height: auto; aspect-ratio: 44 / 30; border: 3px solid var(--ink); }
+.toly-info { color: #fff; text-shadow: 2px 2px 0 var(--ink); font-size: 8px; line-height: 1.8; max-width: 340px; }
+.toly-info p { margin: 0 0 6px; }
+.toly-info b { color: var(--yellow); font-weight: normal; }
+#scr-toly-game { padding: 0; background: var(--ink); }
+.stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.pause-btn { position: absolute; top: calc(6px + var(--st)); right: calc(10px + var(--sr)); font-size: 9px; padding: 6px 9px; opacity: 0.85; }
+.controls.race {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 calc(18px + var(--sr)) calc(12px + var(--sb)) calc(18px + var(--sl));
+  pointer-events: none;
+}
+.controls.race .arrow { width: 100px; height: 100px; }

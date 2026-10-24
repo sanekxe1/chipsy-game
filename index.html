@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div id="app">
@@ -27,7 +27,11 @@
           <span class="tile-name">ХОЧУ ЧИПСОВ</span>
           <span class="tile-desc">уровни и бесконечный забег</span>
         </button>
-        <div class="tile locked"><span class="tile-q">?</span><span class="tile-name">СКОРО</span></div>
+        <button class="tile red" id="tile-toly">
+          <canvas id="tile-toly-icon" width="20" height="28"></canvas>
+          <span class="tile-name">ТОЛЬЯТТИНСКАЯ СУЕТА</span>
+          <span class="tile-desc">гонка на Гранте по трассе</span>
+        </button>
       </div>
     </div>
   </section>
@@ -74,6 +78,64 @@
       <h2 class="h2" id="levels-title">УРОВНИ</h2>
     </div>
     <div class="cards" id="levels"></div>
+  </section>
+
+  <!-- Тольяттинская суета: старт -->
+  <section id="scr-toly" class="screen">
+    <div class="bar">
+      <button class="btn small back" data-back="menu">НАЗАД</button>
+      <h2 class="h2">ТОЛЬЯТТИНСКАЯ СУЕТА</h2>
+    </div>
+    <div class="mode-row">
+      <canvas id="toly-hero" width="44" height="30"></canvas>
+      <div class="mode-buttons">
+        <div class="toly-info">
+          <p><b>САВЕЛИЙ</b> гонит на своей Гранте по трассе.</p>
+          <p>Обгоняй машины, можно по встречке. Задел боком — царапина, врезался — авария.</p>
+          <p>Собирай монетки!</p>
+        </div>
+        <button class="mode-btn red" id="toly-go">
+          <span class="mode-name">ПОЕХАЛИ!</span>
+          <span class="mode-desc" id="toly-desc">рекорд: 0 · монет: 0</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Тольяттинская суета: гонка -->
+  <section id="scr-toly-game" class="screen">
+    <div id="stage2" class="stage"><canvas id="cv2"></canvas></div>
+    <button class="btn small pause-btn" id="t-pause">II</button>
+    <div class="controls race">
+      <button class="ctl arrow left" id="t-left" aria-label="Влево"></button>
+      <button class="ctl arrow right" id="t-right" aria-label="Вправо"></button>
+    </div>
+    <div class="overlay" id="t-ov-pause">
+      <div class="panel">
+        <h2 class="h2">ПАУЗА</h2>
+        <button class="btn" id="t-resume">ПРОДОЛЖИТЬ</button>
+        <button class="btn" id="t-sound">ЗВУК: ВКЛ</button>
+        <button class="btn red" id="t-exit">ВЫЙТИ</button>
+      </div>
+    </div>
+    <div class="overlay" id="t-ov-over">
+      <div class="panel wide">
+        <h2 class="h2">ПРИЕХАЛИ</h2>
+        <div class="newrec" id="t-new">НОВЫЙ РЕКОРД!</div>
+        <div class="stats">
+          <div><span>ОЧКИ</span><b id="t-score">0</b></div>
+          <div><span>РЕКОРД</span><b id="t-best">0</b></div>
+          <div><span>МОНЕТЫ</span><b id="t-coins">0</b></div>
+          <div><span>ДИСТАНЦИЯ</span><b id="t-dist">0 м</b></div>
+          <div><span>ЦАРАПИНЫ</span><b id="t-scr">0</b></div>
+        </div>
+        <p class="hint" id="t-total"></p>
+        <div class="btn-row">
+          <button class="btn" id="t-again">ЕЩЁ РАЗ</button>
+          <button class="btn" id="t-back">ВЫЙТИ</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- Игра -->
@@ -142,11 +204,13 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=6"></script>
-<script src="js/sprites.js?v=6"></script>
-<script src="js/worlds.js?v=6"></script>
-<script src="js/levels.js?v=6"></script>
-<script src="js/game.js?v=6"></script>
-<script src="js/main.js?v=6"></script>
+<script src="js/audio.js?v=7"></script>
+<script src="js/sprites.js?v=7"></script>
+<script src="js/worlds.js?v=7"></script>
+<script src="js/levels.js?v=7"></script>
+<script src="js/game.js?v=7"></script>
+<script src="js/toly-sprites.js?v=7"></script>
+<script src="js/toly.js?v=7"></script>
+<script src="js/main.js?v=7"></script>
 </body>
 </html>
