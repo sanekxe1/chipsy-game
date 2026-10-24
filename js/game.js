@@ -97,6 +97,16 @@ const Game = (() => {
   const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   const haptic = type => window.haptic && window.haptic(type);
   const rowTop = r => H - (ROWS - r) * TILE;
+  // скорость бесконечного забега растёт со временем; distAt — сколько пикселей пройдено к моменту t
+  const SPEED0 = 72, SPEED_ADD = 78, RAMP = 40;
+  const baseSpeed = t => SPEED0 + SPEED_ADD * (1 - Math.exp(-t / RAMP));
+  const distAt = t => (SPEED0 + SPEED_ADD) * t - SPEED_ADD * RAMP * (1 - Math.exp(-t / RAMP));
+  // время, к которому игрок без бустов пробежал бы dist пикселей
+  function timeForDist(dist) {
+    let lo = 0, hi = 600;
+    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (distAt(mid) < dist) lo = mid; else hi = mid; }
+    return lo;
+  }
 
   function init(cv, st) {
     canvas = cv; stage = st;
@@ -148,7 +158,8 @@ const Game = (() => {
     hasAvalanche = true;
     startOffset = headStart ? HEAD_START * 16 : 0;
     camX = startOffset;
-    if (headStart) t = 20;
+    // с рывком скорость, лавина и трасса сразу такие, как на 500 очках
+    if (headStart) t = timeForDist(startOffset);
     genX = startOffset - 32; firstChunk = true; nextBoostX = startOffset + 900; nextDrinkX = startOffset + 700;
     banner = headStart
       ? { text: 'РЫВОК +500!', sub: 'Стартуешь сразу с 500 очков', t: 2.4 }
@@ -292,8 +303,7 @@ const Game = (() => {
   }
 
   function genChunk() {
-    // после рывка сложность как на ~2000 м, а не на 500 «честных» метрах
-    const d = Math.min(1, (camX - startOffset) / 9000 + (startOffset ? 0.25 : 0));
+    const d = Math.min(1, camX / 9000);
     if (firstChunk) {
       firstChunk = false;
       const L = Math.ceil((W + 112) / 16) * 16;
@@ -506,7 +516,7 @@ const Game = (() => {
     // камера
     if (mode === 'endless') {
       if (!dying) {
-        const base = 72 + 78 * (1 - Math.exp(-t / 40));
+        const base = baseSpeed(t);
         mult += ((boostT > 0 ? 1.75 : 1) - mult) * Math.min(1, dt * 3);
         speed = base * mult;
         camX += speed * dt;
@@ -746,7 +756,7 @@ const Game = (() => {
       if (it.type === 'boost') startBoost();
       else if (it.type === 'beer') {
         beerT = BEER_TIME;
-        banner = { text: 'ДВОЙНОЙ ПРЫЖОК!', sub: 'Жми прыжок ещё раз в воздухе', t: 1.6 };
+        banner = { text: 'ПИВО!', sub: 'Двойной прыжок на 7 секунд', t: 1.8 };
         Sound.play('boost');
       } else if (it.type === 'vodka') {
         if (vodkaWarn <= 0 && swapT <= 0) { vodkaWarn = VODKA_WARN; Sound.play('tick'); }
@@ -1089,7 +1099,7 @@ const Game = (() => {
   return {
     init, startEndless, startLevel, stop, pause, resume, layout, setSafe, input, CHARS,
     // для отладки из консоли: Game.debug.spawn('dog'), Game.debug.boost()
-    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; }, item: type => items.push({ type, x: player.x, y: player.y, w: 8, h: 14, bob: 0 }) },
+    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; }, state: () => ({ t: Math.round(t), speed: Math.round(speed), score: score() }), item: type => items.push({ type, x: player.x, y: player.y, w: 8, h: 14, bob: 0 }) },
     set onGameOver(fn) { onOver = fn; },
     set onLevelEnd(fn) { onLevelEnd = fn; },
     set onSwap(fn) { onSwap = fn; },
