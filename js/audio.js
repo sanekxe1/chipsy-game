@@ -119,6 +119,12 @@ const Sound = (() => {
         [0, 0.16].forEach(d => { tone('sawtooth', 380, 180, t + d, 0.1, 0.25); noise(t + d, 0.08, 0.3, 700); });
         break;
       case 'spring': tone('square', 200, 900, t, 0.25, 0.2); break;
+      case 'jump2': tone('square', 400, 900, t, 0.12, 0.2); break;
+      case 'tick': tone('square', 880, null, t, 0.08, 0.18); break;
+      case 'swap':
+        tone('sawtooth', 300, 600, t, 0.15, 0.2);
+        tone('sawtooth', 600, 300, t + 0.15, 0.15, 0.2);
+        break;
       case 'break':
         noise(t, 0.18, 0.6, 1200, null, 0.6);
         tone('square', 300, 60, t, 0.15, 0.2);

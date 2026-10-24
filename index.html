@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div id="app">
@@ -58,6 +58,11 @@
           <span class="mode-name">БЕСКОНЕЧНЫЙ ЗАБЕГ</span>
           <span class="mode-desc" id="m-endless-desc">рекорд: 0</span>
         </button>
+        <div class="shop">
+          <div class="bank"><canvas id="bank-icon" width="12" height="11"></canvas>КОПИЛКА: <b id="bank-coins">0</b></div>
+          <button class="btn small" id="buy-start">КУПИТЬ РЫВОК +500 · 100</button>
+          <label class="use" id="use-start-row"><input type="checkbox" id="use-start"><span>РЫВОК НА СТАРТЕ (есть: <b id="starts">0</b>)</span></label>
+        </div>
       </div>
     </div>
   </section>
@@ -102,6 +107,7 @@
           <div><span id="o-item-label">ЧИПСЫ</span><b id="o-items">0</b></div>
           <div><span>ДИСТАНЦИЯ</span><b id="o-dist">0 м</b></div>
         </div>
+        <p class="hint" id="o-bank"></p>
         <div class="btn-row">
           <button class="btn" id="o-again">ЕЩЁ РАЗ</button>
           <button class="btn" id="o-back">ВЫЙТИ</button>
@@ -118,6 +124,7 @@
           <div><span id="l-item-label">ЧИПСЫ</span><b id="l-items">0/0</b></div>
         </div>
         <p class="hint" id="l-hint"></p>
+        <p class="hint" id="l-bank"></p>
         <div class="btn-row">
           <button class="btn" id="l-next">ДАЛЬШЕ</button>
           <button class="btn" id="l-again">ЕЩЁ РАЗ</button>
@@ -135,11 +142,11 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=3"></script>
-<script src="js/sprites.js?v=3"></script>
-<script src="js/worlds.js?v=3"></script>
-<script src="js/levels.js?v=3"></script>
-<script src="js/game.js?v=3"></script>
-<script src="js/main.js?v=3"></script>
+<script src="js/audio.js?v=4"></script>
+<script src="js/sprites.js?v=4"></script>
+<script src="js/worlds.js?v=4"></script>
+<script src="js/levels.js?v=4"></script>
+<script src="js/game.js?v=4"></script>
+<script src="js/main.js?v=4"></script>
 </body>
 </html>

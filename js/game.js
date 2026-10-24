@@ -11,9 +11,40 @@ const Records = {
   },
 };
 
+// Копилка: все собранные чипсы и корм копятся между забегами, на них покупается рывок +500
+const Bank = {
+  START_PRICE: 100,
+  get() {
+    try {
+      const v = JSON.parse(localStorage.getItem('chips_bank'));
+      if (v) return { coins: v.coins | 0, starts: v.starts | 0 };
+    } catch (e) { /* нет данных */ }
+    return { coins: 0, starts: 0 };
+  },
+  save(b) {
+    try { localStorage.setItem('chips_bank', JSON.stringify(b)); } catch (e) { /* нет доступа */ }
+  },
+  add(n) { const b = this.get(); b.coins += n; this.save(b); return b; },
+  buyStart() {
+    const b = this.get();
+    if (b.coins < this.START_PRICE) return false;
+    b.coins -= this.START_PRICE; b.starts++;
+    this.save(b);
+    return true;
+  },
+  useStart() {
+    const b = this.get();
+    if (b.starts < 1) return false;
+    b.starts--;
+    this.save(b);
+    return true;
+  },
+};
+
 const Game = (() => {
   const GRAV = 900;
   const BOOST_TIME = 6.5;
+  const BEER_TIME = 7, VODKA_WARN = 3, VODKA_TIME = 5, HEAD_START = 500;
   const RUN = 105;
   const TILE = 16, ROWS = 11;
   const H = 180, GROUND_Y = H - 32;
@@ -55,8 +86,9 @@ const Game = (() => {
   let player, solids, near, enemies, items, parts, texts, flags;
   let lives, collected, kills, boostT, shakeT, banner, dying, deathT, best;
   let won, winT, lvlTime, spawn;
+  let nextDrinkX, beerT, airJumps, vodkaWarn, swapT, startOffset;
   const input = { left: false, right: false, jump: false, jumpBuf: 0 };
-  let onOver = null, onLevelEnd = null;
+  let onOver = null, onLevelEnd = null, onSwap = null;
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   const randi = (a, b) => Math.floor(rnd(a, b + 1));
@@ -94,6 +126,8 @@ const Game = (() => {
     solids = []; near = []; enemies = []; items = []; parts = []; texts = []; flags = [];
     lives = 3; collected = 0; kills = 0; boostT = 0; shakeT = 0; dying = false; deathT = 0;
     won = false; winT = 0; lvlTime = 0; level = null;
+    beerT = 0; airJumps = 0; vodkaWarn = 0; swapT = 0; startOffset = 0; nextDrinkX = 700;
+    setSwap(false);
     player = { x: 0, y: 0, w: ch.w, h: ch.h, vx: 0, vy: 0, onGround: true, coyote: 0, inv: 0, jumping: false, anim: 0, prevBottom: 0, face: 1, ride: null };
     input.left = input.right = input.jump = false; input.jumpBuf = 0;
   }
@@ -107,15 +141,21 @@ const Game = (() => {
     Sound.startMusic();
   }
 
-  function startEndless(id) {
+  // headStart — купленный в копилке рывок: забег начинается сразу с 500 очков
+  function startEndless(id, headStart) {
     reset(id);
     mode = 'endless';
     hasAvalanche = true;
-    genX = -32; firstChunk = true; nextBoostX = 900;
-    banner = { text: 'ВПЕРЁД!', sub: id === 'chips' ? 'Собирай корм и беги от потопа!' : 'Собирай чипсы и беги от дедлайнов!', t: 2.4 };
+    startOffset = headStart ? HEAD_START * 16 : 0;
+    camX = startOffset;
+    if (headStart) t = 20;
+    genX = startOffset - 32; firstChunk = true; nextBoostX = startOffset + 900; nextDrinkX = startOffset + 700;
+    banner = headStart
+      ? { text: 'РЫВОК +500!', sub: 'Стартуешь сразу с 500 очков', t: 2.4 }
+      : { text: 'ВПЕРЁД!', sub: id === 'chips' ? 'Собирай корм и беги от потопа!' : 'Собирай чипсы и беги от дедлайнов!', t: 2.4 };
     best = Records.get(id);
-    player.x = Math.round(W * 0.35); player.y = GROUND_Y - ch.h;
-    while (genX < W + 80) genChunk();
+    player.x = startOffset + Math.round(W * 0.35); player.y = GROUND_Y - ch.h;
+    while (genX < camX + W + 80) genChunk();
     run();
   }
 
@@ -132,8 +172,11 @@ const Game = (() => {
     run();
   }
 
+  function setSwap(on) { if (onSwap) onSwap(on); }
+
   function stop() {
     running = false;
+    setSwap(false);
     cancelAnimationFrame(raf);
     Sound.stopMusic();
   }
@@ -193,6 +236,8 @@ const Game = (() => {
           case 'T': solids.push({ x, y: y + 6, w: TILE, h: 10, type: 'spring', bumpT: 0 }); break;
           case 'c': addItem(x + 8, y + 2); level.total++; break;
           case 'b': items.push({ type: 'boost', x: x + 1, y: y + 2, w: 14, h: 12, bob: 0 }); break;
+          case 'V': if (ch.theme === 'work') items.push({ type: 'vodka', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
+          case 'L': if (ch.theme === 'work') items.push({ type: 'beer', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
           case 'C': flags.push({ x: x + 7, y: y + TILE, on: false }); break;
           case 'F': level.finishX = x; level.finishY = y + TILE; break;
           case 'P': spawn = { x: x + 3, y: y + TILE - ch.h }; break;
@@ -207,6 +252,7 @@ const Game = (() => {
     stop();
     const stars = !win ? 0 : 1 + (collected >= Math.ceil(level.total * 0.8) ? 1 : 0) + (level.escape ? (lives === 3 ? 1 : 0) : (lvlTime <= level.par ? 1 : 0));
     if (win) Progress.save(charId, level.idx, stars);
+    Bank.add(collected);
     if (onLevelEnd) onLevelEnd({ won: win, stars, time: lvlTime, par: level.par, collected, total: level.total, lives, escape: level.escape, hero: charId, idx: level.idx, name: level.def.name });
   }
 
@@ -246,12 +292,13 @@ const Game = (() => {
   }
 
   function genChunk() {
-    const d = Math.min(1, camX / 9000);
+    // после рывка сложность как на ~2000 м, а не на 500 «честных» метрах
+    const d = Math.min(1, (camX - startOffset) / 9000 + (startOffset ? 0.25 : 0));
     if (firstChunk) {
       firstChunk = false;
       const L = Math.ceil((W + 112) / 16) * 16;
       addGround(genX, L);
-      itemLine(Math.round(W * 0.6), GROUND_Y - 16, 4);
+      itemLine(startOffset + Math.round(W * 0.6), GROUND_Y - 16, 4);
       genX += L;
       return;
     }
@@ -289,6 +336,13 @@ const Game = (() => {
       const bx = Math.max(nextBoostX, x0 + 24);
       items.push({ type: 'boost', x: bx, y: GROUND_Y - 40, w: 14, h: 12, bob: 0 });
       nextBoostX = bx + 1300 + Math.random() * 1100;
+    }
+
+    // водка и пиво — только у Саши и Сони
+    if (ch.theme === 'work' && nextDrinkX < x0 + L) {
+      const dx = Math.max(nextDrinkX, x0 + 24);
+      items.push({ type: Math.random() < 0.55 ? 'beer' : 'vodka', x: dx, y: GROUND_Y - 34, w: 8, h: 14, bob: Math.random() * 6 });
+      nextDrinkX = dx + 900 + Math.random() * 900;
     }
 
     genX = x0 + L;
@@ -425,6 +479,7 @@ const Game = (() => {
     const sc = score();
     const isNew = sc > best;
     if (isNew) Records.set(charId, sc);
+    Bank.add(collected);
     if (onOver) onOver({ score: sc, best: Math.max(sc, best), isNew, collected, kills, dist: Math.floor(camX / 16), charId });
   }
 
@@ -433,13 +488,25 @@ const Game = (() => {
     t += dt;
     if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
     shakeT = Math.max(0, shakeT - dt);
-    if (!dying && !won) boostT = Math.max(0, boostT - dt);
+    if (!dying && !won) {
+      boostT = Math.max(0, boostT - dt);
+      beerT = Math.max(0, beerT - dt);
+      if (vodkaWarn > 0) {
+        const before = Math.ceil(vodkaWarn);
+        vodkaWarn -= dt;
+        if (vodkaWarn <= 0) { swapT = VODKA_TIME; setSwap(true); Sound.play('swap'); haptic('heavy'); }
+        else if (Math.ceil(vodkaWarn) !== before) Sound.play('tick');
+      } else if (swapT > 0) {
+        swapT -= dt;
+        if (swapT <= 0) { swapT = 0; setSwap(false); Sound.play('checkpoint'); }
+      }
+    }
     if (mode === 'level' && !dying && !won) lvlTime += dt;
 
     // камера
     if (mode === 'endless') {
       if (!dying) {
-        const base = 62 + 78 * (1 - Math.exp(-t / 90));
+        const base = 72 + 78 * (1 - Math.exp(-t / 40));
         mult += ((boostT > 0 ? 1.75 : 1) - mult) * Math.min(1, dt * 3);
         speed = base * mult;
         camX += speed * dt;
@@ -552,7 +619,14 @@ const Game = (() => {
     if (!won && input.jumpBuf > 0 && (p.onGround || p.coyote > 0)) {
       p.vy = -ch.jump;
       p.onGround = false; p.coyote = 0; p.jumping = true; input.jumpBuf = 0;
+      airJumps = beerT > 0 ? 1 : 0;
       Sound.play('jump');
+    } else if (!won && input.jumpBuf > 0 && beerT > 0 && airJumps > 0 && !p.onGround) {
+      // пиво: второй прыжок в воздухе
+      p.vy = -ch.jump * 0.9;
+      p.jumping = true; input.jumpBuf = 0; airJumps--;
+      Sound.play('jump2');
+      for (let i = 0; i < 6; i++) parts.push({ x: p.x + p.w / 2, y: p.y + p.h, vx: rnd(-50, 50), vy: rnd(10, 60), life: 0.35, color: i % 2 ? '#ffd23f' : '#ffffff', size: 2 });
     }
     if (p.jumping && !input.jump && p.vy < -150) p.vy = -150;
     p.vy = Math.min(p.vy + GRAV * dt, 520);
@@ -670,7 +744,14 @@ const Game = (() => {
       if (dying || !hit(player, it)) continue;
       it.dead = true;
       if (it.type === 'boost') startBoost();
-      else collect(it.x + it.w / 2, it.y);
+      else if (it.type === 'beer') {
+        beerT = BEER_TIME;
+        banner = { text: 'ДВОЙНОЙ ПРЫЖОК!', sub: 'Жми прыжок ещё раз в воздухе', t: 1.6 };
+        Sound.play('boost');
+      } else if (it.type === 'vodka') {
+        if (vodkaWarn <= 0 && swapT <= 0) { vodkaWarn = VODKA_WARN; Sound.play('tick'); }
+        banner = { text: 'ОЙ, ВОДКА!', t: 1.4 };
+      } else collect(it.x + it.w / 2, it.y);
     }
   }
 
@@ -823,6 +904,9 @@ const Game = (() => {
         ctx.fillRect(cx - 11, cy, 2, 2); ctx.fillRect(cx + 9, cy, 2, 2);
         ctx.fillRect(cx, cy - 11, 2, 2); ctx.fillRect(cx, cy + 9, 2, 2);
         spr(SPR[ch.boost], cx, it.y + it.h + 2 + b);
+      } else if (it.type === 'beer' || it.type === 'vodka') {
+        const b = Math.sin(t * 4 + it.bob) * 1.5;
+        spr(SPR[it.type], it.x + it.w / 2, it.y + it.h + 1 + b);
       } else {
         const b = it.type === 'pop' ? 0 : Math.sin(t * 4 + it.bob) * 1.5;
         spr(SPR[ch.item], it.x + it.w / 2, it.y + it.h + 1 + b);
@@ -958,6 +1042,22 @@ const Game = (() => {
       ctx.fillStyle = Math.floor(t * 8) % 2 ? '#ffd23f' : '#ff5a1f';
       ctx.fillRect(hx, top + 28, Math.round(bw * boostT / BOOST_TIME), 3);
     }
+    // эффекты от пива и водки: иконка и полоска времени
+    let ey = top + (boostT > 0 ? 36 : 28);
+    const effect = (img, frac, color) => {
+      ctx.drawImage(img, hx, ey);
+      ctx.fillStyle = '#1b1626'; ctx.fillRect(hx + 11, ey + 5, 32, 5);
+      ctx.fillStyle = color; ctx.fillRect(hx + 12, ey + 6, Math.round(30 * frac), 3);
+      ey += 18;
+    };
+    if (beerT > 0) effect(SPR.beer, beerT / BEER_TIME, '#ffd23f');
+    if (swapT > 0) effect(SPR.vodka, swapT / VODKA_TIME, '#e33b2e');
+    if (vodkaWarn > 0) {
+      text(String(Math.ceil(vodkaWarn)), Math.round(W / 2), Math.round(H * 0.42), 24, '#e33b2e', 'center');
+      text('КНОПКИ ПОМЕНЯЮТСЯ!', Math.round(W / 2), Math.round(H * 0.42) + 30, 6, '#ffffff', 'center');
+    } else if (swapT > 0 && Math.floor(t * 3) % 2) {
+      text('КНОПКИ ПЕРЕПУТАНЫ!', Math.round(W / 2), top + 22, 6, '#e33b2e', 'center');
+    }
     if (banner) {
       ctx.globalAlpha = Math.min(1, banner.t * 2);
       const y = Math.round(H * 0.3);
@@ -989,9 +1089,10 @@ const Game = (() => {
   return {
     init, startEndless, startLevel, stop, pause, resume, layout, setSafe, input, CHARS,
     // для отладки из консоли: Game.debug.spawn('dog'), Game.debug.boost()
-    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; } },
+    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; }, item: type => items.push({ type, x: player.x, y: player.y, w: 8, h: 14, bob: 0 }) },
     set onGameOver(fn) { onOver = fn; },
     set onLevelEnd(fn) { onLevelEnd = fn; },
+    set onSwap(fn) { onSwap = fn; },
     get running() { return running; },
     get paused() { return paused; },
     get mode() { return mode; },

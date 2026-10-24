@@ -159,7 +159,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   padding: 0 calc(18px + var(--sr)) calc(12px + var(--sb)) calc(18px + var(--sl));
   pointer-events: none;
 }
-.pad { display: flex; gap: 12px; }
+.pad { display: flex; gap: 16px; }
+/* водка: кнопки меняются местами */
+#controls.swapped { flex-direction: row-reverse; }
+#controls.swapped .pad { flex-direction: row-reverse; }
+#controls.swapped .ctl { border-color: rgba(227, 59, 46, 0.9); }
 .ctl {
   pointer-events: auto;
   border: 3px solid rgba(27, 22, 38, 0.7);
@@ -168,17 +172,17 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   position: relative;
 }
 .ctl.down { background: rgba(255, 233, 160, 0.8); transform: translateY(2px); }
-.arrow { width: 62px; height: 62px; border-radius: 10px; }
+.arrow { width: 86px; height: 86px; border-radius: 12px; }
 .arrow::before {
   content: '';
   position: absolute; top: 50%; left: 50%;
-  border: 13px solid transparent;
+  border: 17px solid transparent;
   transform: translate(-50%, -50%);
 }
-.arrow.left::before { border-right: 18px solid rgba(27, 22, 38, 0.8); border-left: 0; }
-.arrow.right::before { border-left: 18px solid rgba(27, 22, 38, 0.8); border-right: 0; }
-.jump { width: 78px; height: 78px; border-radius: 50%; background: rgba(227, 59, 46, 0.6); display: flex; align-items: center; justify-content: center; }
-.jump span { width: 0; height: 0; border: 13px solid transparent; border-bottom: 18px solid #fff; border-top: 0; margin-top: -6px; }
+.arrow.left::before { border-right: 24px solid rgba(27, 22, 38, 0.8); border-left: 0; }
+.arrow.right::before { border-left: 24px solid rgba(27, 22, 38, 0.8); border-right: 0; }
+.jump { width: 108px; height: 108px; border-radius: 50%; background: rgba(227, 59, 46, 0.6); display: flex; align-items: center; justify-content: center; }
+.jump span { width: 0; height: 0; border: 18px solid transparent; border-bottom: 24px solid #fff; border-top: 0; margin-top: -8px; }
 .jump.down { background: rgba(255, 90, 74, 0.85); }
 
 /* ---------- Оверлеи ---------- */
@@ -228,3 +232,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 @media (orientation: portrait) and (pointer: coarse) {
   #rotate { display: flex; }
 }
+
+/* ---------- Копилка ---------- */
+.shop { display: flex; flex-direction: column; gap: 8px; color: #fff; text-shadow: 2px 2px 0 var(--ink); font-size: 8px; }
+.bank { display: flex; align-items: center; gap: 8px; font-size: 10px; }
+.bank b { color: var(--yellow); font-weight: normal; }
+.bank canvas { width: 24px; height: 22px; }
+.shop .btn[disabled] { opacity: 0.5; }
+.use { display: flex; align-items: center; gap: 8px; cursor: pointer; line-height: 1.5; }
+.use input { width: 18px; height: 18px; accent-color: var(--yellow); margin: 0; }
+.use b { color: var(--yellow); font-weight: normal; }
+.use.off { opacity: 0.5; pointer-events: none; }

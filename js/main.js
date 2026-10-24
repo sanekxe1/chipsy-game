@@ -155,7 +155,18 @@
     animate(canvases);
   }
 
+  function renderBank() {
+    const b = Bank.get();
+    $('#bank-coins').textContent = b.coins;
+    $('#starts').textContent = b.starts;
+    $('#buy-start').disabled = b.coins < Bank.START_PRICE;
+    $('#use-start-row').classList.toggle('off', b.starts < 1);
+    if (b.starts < 1) $('#use-start').checked = false;
+  }
+
   function renderMode() {
+    renderBank();
+    drawInto($('#bank-icon'), Game.CHARS[hero].item === 'kibble' ? SPR.kibble : SPR.chip, null);
     $('#mode-title').textContent = Game.CHARS[hero].name.toUpperCase();
     $('#m-levels-desc').innerHTML = '<i class="st">★</i> ' + Progress.total(hero) + ' из ' + LEVELS[hero].length * 3;
     $('#m-endless-desc').textContent = 'рекорд: ' + Records.get(hero);
@@ -200,8 +211,9 @@
   }
 
   function startEndless() {
+    const headStart = $('#use-start').checked && Bank.useStart();
     enterGame();
-    Game.startEndless(hero);
+    Game.startEndless(hero, headStart);
   }
 
   function doPause() {
@@ -218,6 +230,14 @@
   }
 
   Game.init($('#cv'), $('#stage'));
+  // водка: экранные кнопки меняются местами, на клавиатуре — стрелки
+  let swapped = false;
+  Game.onSwap = on => {
+    swapped = on;
+    Game.input.left = Game.input.right = false;
+    document.querySelectorAll('.ctl.down').forEach(b => b.classList.remove('down'));
+    $('#controls').classList.toggle('swapped', on);
+  };
   Game.onGameOver = r => {
     $('#o-score').textContent = r.score;
     $('#o-best').textContent = r.best;
@@ -225,6 +245,7 @@
     $('#o-item-label').textContent = ITEM_NAMES[Game.CHARS[r.charId].item];
     $('#o-dist').textContent = r.dist + ' м';
     $('#o-new').classList.toggle('show', r.isNew);
+    $('#o-bank').textContent = '+' + r.collected + ' в копилку · всего ' + Bank.get().coins;
     $('#ov-over').classList.add('show');
     if (r.isNew) window.haptic('heavy');
   };
@@ -239,6 +260,7 @@
     $('#l-hint').textContent = r.won
       ? 'Звёзды: финиш · 80% ' + ITEM_NAMES[Game.CHARS[r.hero].item].toLowerCase() + ' · ' + (r.escape ? 'без потери жизней' : 'быстрее ' + fmt(r.par))
       : 'Попробуй ещё раз — у тебя получится!';
+    $('#l-bank').textContent = '+' + r.collected + ' в копилку · всего ' + Bank.get().coins;
     const hasNext = r.won && r.idx + 1 < LEVELS[r.hero].length;
     $('#l-next').style.display = hasNext ? '' : 'none';
     $('#ov-level').classList.add('show');
@@ -257,6 +279,12 @@
   $('#tile-chips').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('select'); });
   $('#m-levels').addEventListener('click', () => { Sound.play('click'); show('levels'); });
   $('#m-endless').addEventListener('click', startEndless);
+  $('#buy-start').addEventListener('click', () => {
+    if (Bank.buyStart()) { Sound.play('boost'); window.haptic('medium'); $('#use-start').checked = true; }
+    else Sound.play('bump');
+    renderBank();
+  });
+  $('#use-start').addEventListener('change', () => Sound.play('click'));
   $('#btn-pause').addEventListener('click', doPause);
   $('#p-resume').addEventListener('click', () => { $('#ov-pause').classList.remove('show'); Game.resume(); });
   $('#p-menu').addEventListener('click', exitGame);
@@ -294,15 +322,18 @@
   window.addEventListener('keydown', e => {
     if (current !== 'game') return;
     if (e.code === 'Escape' || e.code === 'KeyP') { doPause(); return; }
-    const k = KEYS[e.code];
+    let k = KEYS[e.code];
     if (!k) return;
+    if (swapped && k !== 'jump') k = k === 'left' ? 'right' : 'left';
     e.preventDefault();
     if (k === 'jump' && !Game.input.jump) Game.input.jumpBuf = 0.12;
     Game.input[k] = true;
   });
   window.addEventListener('keyup', e => {
-    const k = KEYS[e.code];
-    if (k) Game.input[k] = false;
+    let k = KEYS[e.code];
+    if (!k) return;
+    if (swapped && k !== 'jump') k = k === 'left' ? 'right' : 'left';
+    Game.input[k] = false;
   });
 
   document.addEventListener('visibilitychange', () => { if (document.hidden && current === 'game') doPause(); });

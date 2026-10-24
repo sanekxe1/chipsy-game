@@ -198,7 +198,7 @@ function buildSprites() {
   };
   const longHair = rows => rows.map((r, i) => (i < 1 ? '.hh' + r.slice(3) : r));
   const sashaPal = { h: '#6b4428', c: '#ffffff', j: '#22284a', p: '#7d6b3c', P: '#4d4426', x: '#2a2a33' };
-  const sonyaPal = { h: '#2a1f22', q: '#c9a03a', Q: '#946f1c', c: '#ffffff', j: '#1f1f2b', p: '#7b8496', o: '#c9a26b', r: '#c0606a' };
+  const sonyaPal = { h: '#2a1f22', q: '#c9a03a', Q: '#946f1c', c: '#e33b2e', j: '#1f1f2b', p: '#7b8496', o: '#c9a26b', r: '#c0606a' };
 
   // Саша на кроссовом мотоцикле (26x22)
   const MOTO = [
@@ -304,6 +304,38 @@ function buildSprites() {
     '.mmmmm.',
   ], { x: '#24222e', r: '#ff6a1f', y: '#ffd23f' });
   SPR.motoIcon = mk(MOTO.slice(10).map(r => r.replace(/[hcspoeS]/g, '.')), motoPal);
+  // бутылка водки: на 5 секунд меняет кнопки местами
+  SPR.vodka = mk([
+    '..rr..',
+    '..mm..',
+    '..mm..',
+    '.mccm.',
+    'mccccm',
+    'mccccm',
+    'mwwwwm',
+    'mwrrwm',
+    'mwwwwm',
+    'mccccm',
+    'mccccm',
+    'mccccm',
+    '.mmmm.',
+  ], { c: '#dff3ff', m: '#a9c6d8' });
+  // бутылка пива: двойной прыжок на 7 секунд
+  SPR.beer = mk([
+    '..yy..',
+    '..oo..',
+    '..oo..',
+    '.oOoo.',
+    'oOoooo',
+    'oyyyyo',
+    'oyrryo',
+    'oyyyyo',
+    'oOoooo',
+    'oOoooo',
+    'oooooo',
+    'oooooo',
+    '.oooo.',
+  ], { o: '#7a3e0e', O: '#b8762a', y: '#ffd23f' });
   // пёрышко
   SPR.feather = mk([
     '.......vv',
