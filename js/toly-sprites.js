@@ -105,6 +105,46 @@ const TSPR = {};
     makeSprite(['..yy..', '.ylyy.', '.yyYy.', '.yyYy.', '.yyYy.', '.yyYy.', '.yyYy.', '..yy..'], { y: '#ffd23f', Y: '#d99a12', l: '#fff3b0' }),
   ];
 
+  // Леся (девушка Савелия) — портрет для звонка. ВРЕМЕННЫЙ: перерисовать по фото, когда автор пришлёт
+  TSPR.lesya = makeSprite([
+    '....hhhhhh....',
+    '..hhhhhhhhhh..',
+    '.hhhhsssshhhh.',
+    '.hhhsssssshhh.',
+    '.hhssesssesshh',
+    '.hhssssssssshh',
+    '.hhsssrrrssshh',
+    '.hhhssssssshh.',
+    '.hhhhsssshhhh.',
+    '.hhhh.ss.hhhh.',
+    'hhhcccccccchhh',
+    'hhcccccccccchh',
+    'hcccccccccccch',
+    '.cccccccccccc.',
+  ], { h: '#7a4a2a', s: '#f2c8a8', e: '#2a1f22', r: '#d0506a', c: '#ff8fb8' });
+  // телефон на дороге
+  TSPR.phone = makeSprite([
+    '.xxxxx.',
+    'xbbbbbx',
+    'xbwbbbx',
+    'xbbbbbx',
+    'xbbbwbx',
+    'xbbbbbx',
+    'xbbbbbx',
+    'xxxxxxx',
+    'xxxmxxx',
+    '.xxxxx.',
+  ], { x: '#1d1f24', b: '#3d7be0', w: '#9fd0f0', m: '#8b93a1' });
+  // яма на асфальте
+  TSPR.hole = makeSprite([
+    '...kkkkkk...',
+    '.kkxxxxxxkk.',
+    'kxxxxxxxxxxk',
+    'kxxxxxxxxxxk',
+    '.kkxxxxxxkk.',
+    '...kkkkkk...',
+  ], { k: '#6a6a72', x: '#1d1d22' }, { outline: false });
+
   // обочина сверху: кроны деревьев, берёзы, кусты
   TSPR.trees = [
     blobSprite(18, 18, [{ c: 8, x: 9, y: 9 }, { c: 5, x: 5, y: 6 }, { c: 5, x: 13, y: 12 }], '#3f9e4a', '#24642b'),

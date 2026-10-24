@@ -245,6 +245,14 @@
     $('#t-ov-over').classList.add('show');
     if (r.isNew) window.haptic('heavy');
   };
+  // дальний свет: кнопка показывает, через сколько секунд снова можно моргнуть
+  Toly.onFlashUI = v => {
+    const b = $('#t-flash');
+    b.classList.toggle('cooldown', v > 0);
+    b.classList.toggle('active', v < 0);
+    $('#t-flash-txt').textContent = v > 0 ? v + ' С' : v < 0 ? 'ВКЛ' : 'ДАЛЬНИЙ';
+  };
+  $('#t-flash').addEventListener('pointerdown', e => { e.preventDefault(); if (!Toly.flash()) Sound.play('bump'); });
   $('#tile-toly').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('toly'); });
   $('#toly-go').addEventListener('click', tolyStart);
   $('#t-pause').addEventListener('click', tolyPause);
@@ -386,6 +394,7 @@
       if (e.code === 'Escape' || e.code === 'KeyP') { tolyPause(); return; }
       const k = KEYS[e.code];
       if (k === 'left' || k === 'right') { e.preventDefault(); Toly.input[k] = true; }
+      if (k === 'jump' && !e.repeat) { e.preventDefault(); Toly.flash(); }
       return;
     }
     if (current !== 'game') return;

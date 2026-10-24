@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <div id="app">
@@ -108,7 +108,10 @@
     <button class="btn small pause-btn" id="t-pause">II</button>
     <div class="controls race">
       <button class="ctl arrow left" id="t-left" aria-label="Влево"></button>
-      <button class="ctl arrow right" id="t-right" aria-label="Вправо"></button>
+      <div class="race-right">
+        <button class="ctl flash-btn" id="t-flash" aria-label="Дальний свет"><span class="beam"></span><b id="t-flash-txt">12</b></button>
+        <button class="ctl arrow right" id="t-right" aria-label="Вправо"></button>
+      </div>
     </div>
     <div class="overlay" id="t-ov-pause">
       <div class="panel">
@@ -204,13 +207,13 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=9"></script>
-<script src="js/sprites.js?v=9"></script>
-<script src="js/worlds.js?v=9"></script>
-<script src="js/levels.js?v=9"></script>
-<script src="js/game.js?v=9"></script>
-<script src="js/toly-sprites.js?v=9"></script>
-<script src="js/toly.js?v=9"></script>
-<script src="js/main.js?v=9"></script>
+<script src="js/audio.js?v=10"></script>
+<script src="js/sprites.js?v=10"></script>
+<script src="js/worlds.js?v=10"></script>
+<script src="js/levels.js?v=10"></script>
+<script src="js/game.js?v=10"></script>
+<script src="js/toly-sprites.js?v=10"></script>
+<script src="js/toly.js?v=10"></script>
+<script src="js/main.js?v=10"></script>
 </body>
 </html>

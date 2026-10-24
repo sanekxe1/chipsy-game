@@ -261,3 +261,18 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   pointer-events: none;
 }
 .controls.race .arrow { width: 100px; height: 100px; }
+
+/* кнопка «дальний свет» */
+.race-right { display: flex; align-items: flex-end; gap: 14px; }
+.flash-btn {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: rgba(255, 210, 63, 0.75);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-size: 8px; color: var(--ink);
+}
+.flash-btn .beam { width: 26px; height: 14px; background:
+  linear-gradient(90deg, var(--ink) 0 6px, transparent 6px),
+  repeating-linear-gradient(180deg, var(--ink) 0 2px, transparent 2px 5px) 9px 0 / 17px 14px no-repeat; }
+.flash-btn b { font-weight: normal; }
+.flash-btn.cooldown { background: rgba(200, 200, 210, 0.45); }
+.flash-btn.active { background: #fff3b0; box-shadow: 0 0 18px #fff3b0; }

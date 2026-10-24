@@ -131,6 +131,11 @@ const Sound = (() => {
       case 'spring': tone('square', 200, 900, t, 0.25, 0.2); break;
       case 'jump2': tone('square', 400, 900, t, 0.12, 0.2); break;
       case 'tick': tone('square', 880, null, t, 0.08, 0.18); break;
+      case 'ring':
+        [0, 0.25, 0.7, 0.95].forEach(d => { tone('square', 1175, null, t + d, 0.1, 0.12); tone('square', 1480, null, t + d + 0.1, 0.1, 0.12); });
+        break;
+      case 'flash': [0, 0.15, 0.3].forEach(d => tone('square', 1760, null, t + d, 0.06, 0.12)); break;
+      case 'thump': tone('sine', 120, 40, t, 0.25, 0.8); noise(t, 0.15, 0.5, 400, null, 0.6); break;
       case 'go': tone('square', 1320, null, t, 0.3, 0.2); tone('square', 660, null, t, 0.3, 0.12); break;
       case 'coin': tone('square', 988, null, t, 0.05, 0.14); tone('square', 1319, null, t + 0.05, 0.12, 0.14); break;
       case 'screech':
