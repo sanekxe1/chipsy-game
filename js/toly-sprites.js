@@ -73,7 +73,7 @@ const TSPR = {};
     'xbbbbbbb', 'xbbbbbbb', '.bbbbbbb', '.rrrrbbb', '..bbbbbb',
   ]).map((r, i) => (i === 10 ? 'j' + r.slice(1) : i === 11 ? 'J' + r.slice(1) : i === 12 ? 's' + r.slice(1) : r));
   // тёмно-серая; светлые блики по краям, чтобы машина не сливалась с асфальтом
-  TSPR.granta = makeSprite(granta, carPal({ b: '#3b4047', B: '#7a828d' }, { g: '#1a2130', G: '#9fb3cc', j: '#1d1f24', J: '#e6e6e6', s: '#e8b48c' }));
+  TSPR.granta = makeSprite(granta, carPal({ b: '#6a717b', B: '#a3abb5' }, { g: '#1a2130', G: '#9fb3cc', j: '#1d1f24', J: '#e6e6e6', s: '#e8b48c' }));
   TSPR.grantaHit = makeSprite(granta, carPal({ b: '#ffb3a8', B: '#e36b5c' }, { j: '#1d1f24', J: '#e6e6e6', s: '#e8b48c' }));
 
   // ---------- Савелий: красная кепка, авиаторы, клетчатая рубашка, джинсы, кеды ----------
