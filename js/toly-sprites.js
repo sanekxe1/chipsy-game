@@ -105,23 +105,26 @@ const TSPR = {};
     makeSprite(['..yy..', '.ylyy.', '.yyYy.', '.yyYy.', '.yyYy.', '.yyYy.', '.yyYy.', '..yy..'], { y: '#ffd23f', Y: '#d99a12', l: '#fff3b0' }),
   ];
 
-  // Леся (девушка Савелия) — портрет для звонка. ВРЕМЕННЫЙ: перерисовать по фото, когда автор пришлёт
+  // Леся (девушка Савелия) — портрет для звонка, по фото: русые прямые волосы до плеч с пробором,
+  // серо-голубые глаза, губы «уточкой», золотые серьги-кольца, серая водолазка, кожанка с заклёпками
   TSPR.lesya = makeSprite([
-    '....hhhhhh....',
-    '..hhhhhhhhhh..',
-    '.hhhhsssshhhh.',
-    '.hhhsssssshhh.',
-    '.hhssesssesshh',
-    '.hhssssssssshh',
-    '.hhsssrrrssshh',
-    '.hhhssssssshh.',
-    '.hhhhsssshhhh.',
-    '.hhhh.ss.hhhh.',
-    'hhhcccccccchhh',
-    'hhcccccccccchh',
-    'hcccccccccccch',
-    '.cccccccccccc.',
-  ], { h: '#7a4a2a', s: '#f2c8a8', e: '#2a1f22', r: '#d0506a', c: '#ff8fb8' });
+    '.....hhhhhh.....',
+    '...hhhhhhhhhh...',
+    '..hhhhhHhhhhhh..',
+    '..hhhsssssshhh..',
+    '..hhsssssssshh..',
+    '.hhsskesskeshh..',
+    '.hhssssssssshh..',
+    '.hhsssssSssshh..',
+    '.hhsssslLssshh..',
+    'yhhhsssssshhhh.y',
+    '.yhhhgggggghhhy.',
+    'jmjhggGgGgGghjmj',
+    'jjmjgGgGgGgGjmjj',
+    'jjjjggggggggjjjj',
+    'jjjjgGgGgGgGjjjj',
+    'jjjjggggggggjjjj',
+  ], { h: '#b8916a', H: '#8a6a4a', s: '#f2c8b0', S: '#d9a08a', e: '#6a8fb0', k: '#2a1f22', l: '#e07a72', L: '#c45a55', y: '#e0b040', g: '#82848d', G: '#62646d', j: '#1d1f24', m: '#c9ced6' });
   // телефон на дороге
   TSPR.phone = makeSprite([
     '.xxxxx.',
