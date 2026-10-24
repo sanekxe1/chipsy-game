@@ -227,9 +227,12 @@ function buildSprites() {
     jump: mk(SASHA_HEAD.concat(SASHA_BODY.j), sashaPal),
     moto: [mk(MOTO, motoPal), mk(motoRows2, motoPal)],
   };
+  // без пальто: рукава и торс — красная кофта, полы пальто над джинсами убираем
+  const noCoat = rows => rows.map((r, i) => (i < 5 ? r.replace(/j/g, 'c') : r.replace(/j/g, '.')));
+  const sonya = rows => SONYA_HEAD.concat(longHair(noCoat(rows)));
   SPR.sonya = {
-    run: [mk(SONYA_HEAD.concat(longHair(SONYA_BODY.a)), sonyaPal), mk(SONYA_HEAD.concat(longHair(SONYA_BODY.b)), sonyaPal)],
-    jump: mk(SONYA_HEAD.concat(longHair(SONYA_BODY.j)), sonyaPal),
+    run: [mk(sonya(SONYA_BODY.a), sonyaPal), mk(sonya(SONYA_BODY.b), sonyaPal)],
+    jump: mk(sonya(SONYA_BODY.j), sonyaPal),
   };
 
   // ---------- Кот Чипс (16x12): полосатый табби с белым, зелёные глаза, рыжее пятнышко у носа ----------
