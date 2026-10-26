@@ -7,13 +7,14 @@
 
 const Toly = (() => {
   const H = 180;
-  const LANE = 28, LANES = 4, ROAD_W = LANE * LANES + 8;
+  const LANE = 28, LANES = 6, ROAD_W = LANE * LANES + 8;
+  const OPP_LANES = [0, 1, 2], SAME_LANES = [3, 4, 5]; // слева встречка, справа попутные
   const SHOULDER = 24;          // насколько можно уехать на обочину во время звонка
-  const STEER = 120;            // скорость руления, px/с
+  const STEER = 170;            // скорость руления, px/с
   const PLAYER_BOTTOM = H - 14;
   const CITY_TIME = 7, CITY_SLOW = 0.8;
   const FLASH_TIME = 3, FLASH_CD = 12;
-  const CALL_TIME = 5;
+  const CALL_TIME = 7;
   const HOLE_PENALTY = 50;
   const CYCLE = 80;             // секунд на день → вечер → ночь → утро
   const TRAFFIC = [             // вид, вес, скорость попутной/встречной (px/с)
@@ -29,7 +30,7 @@ const Toly = (() => {
   let running = false, paused = false, raf = 0, last = 0;
   let t, dist, speed, slow, coins, scrapes, penalty, roadX, player, cars, coinsList, parts, texts, deco, holes, pickups;
   let nextCar, nextCoin, nextDeco, nextSign, nextHole, nextPhone, crashed, crashT, shakeT, banner, best, countdown, scrapeCD;
-  let cityT, cityMult, flashT, flashCD, callT, rain, rainA, rainTimer, drops, lastFlashUI;
+  let raceT, cityT, cityMult, flashT, flashCD, callT, rain, rainA, rainTimer, drops, lastFlashUI;
   const input = { left: false, right: false };
   let onOver = null, onFlashUI = null;
 
@@ -80,13 +81,13 @@ const Toly = (() => {
     cars = []; coinsList = []; parts = []; texts = []; deco = []; holes = []; pickups = []; drops = [];
     nextCar = 120; nextCoin = 60; nextDeco = 0; nextSign = 2600; nextHole = 900; nextPhone = 2200;
     crashed = false; crashT = 0; shakeT = 0; scrapeCD = 0;
-    cityT = 0; cityMult = 1; flashT = 0; flashCD = FLASH_CD; callT = 0;
+    raceT = 0; cityT = 0; cityMult = 1; flashT = 0; flashCD = FLASH_CD; callT = 0;
     rain = false; rainA = 0; rainTimer = rnd(25, 40);
     lastFlashUI = null;
     countdown = 3.4;
     banner = null;
     best = Rec.get();
-    player = { x: laneX(2) - 7, y: PLAYER_BOTTOM - 24, w: 14, h: 24, vx: 0, spin: 0 };
+    player = { x: laneX(4) - 7, y: PLAYER_BOTTOM - 24, w: 14, h: 24, vx: 0, spin: 0 };
     input.left = input.right = false;
     for (let y = -40; y < H + 20; y += 10) addDeco(y);
     running = true; paused = false;
@@ -130,8 +131,8 @@ const Toly = (() => {
     flashT = FLASH_TIME;
     // машины с двух центральных полос уходят в крайние
     for (const c of cars) {
-      if (c.lane === 1) c.lane = 0;
-      else if (c.lane === 2) c.lane = 3;
+      if (c.lane === 2) c.lane = 1;
+      else if (c.lane === 3) c.lane = 4;
     }
     banner = { text: 'ДАЛЬНИЙ!', sub: 'Центр свободен на 3 секунды', t: 1.4 };
     Sound.play('flash');
@@ -170,10 +171,10 @@ const Toly = (() => {
     let r = Math.random() * total, def = TRAFFIC[0];
     for (const tr of TRAFFIC) { r -= tr.w; if (r <= 0) { def = tr; break; } }
     const busy = lanesBlocked(-60);
-    if (busy.size >= 2) return;
-    // попутные полосы — правые (2, 3), встречные — левые (0, 1); при дальнем свете центр не занимаем
+    if (busy.size >= 4) return;
+    // при дальнем свете две центральные полосы (2 и 3) не занимаем
     const opp = Math.random() < 0.35 + 0.15 * d;
-    const lanes = (opp ? [0, 1] : [2, 3]).filter(l => !busy.has(l) && !(flashT > 0 && (l === 1 || l === 2)));
+    const lanes = (opp ? OPP_LANES : SAME_LANES).filter(l => !busy.has(l) && !(flashT > 0 && (l === 2 || l === 3)));
     if (!lanes.length) return;
     const lane = lanes[Math.floor(Math.random() * lanes.length)];
     const variants = TSPR.cars[def.kind];
@@ -211,6 +212,7 @@ const Toly = (() => {
       return;
     }
 
+    raceT += dt;
     // таймеры помощников
     cityT = Math.max(0, cityT - dt);
     cityMult += ((cityT > 0 ? CITY_SLOW : 1) - cityMult) * Math.min(1, dt * 2);
@@ -240,26 +242,28 @@ const Toly = (() => {
     } else {
       // скорость растёт со временем; после царапины и в городе машина притормаживает
       slow = Math.min(1, slow + dt * 0.6);
-      speed = (100 + 170 * (1 - Math.exp(-t / 70))) * slow * cityMult;
+      // плавный разгон: целевая скорость растёт со временем, а машина догоняет её постепенно
+      const target = (90 + 180 * (1 - Math.exp(-raceT / 90))) * slow * cityMult;
+      speed += (target - speed) * Math.min(1, dt * (speed < target ? 0.9 : 3));
     }
     const dy = speed * dt;
     dist += dy;
 
     // руление (в дождь машина отзывается медленнее); во время звонка можно на обочину
     if (!crashed) {
-      const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-      player.vx += (dir * STEER - player.vx) * Math.min(1, dt * (12 - 6 * rainA));
-      player.x += player.vx * dt;
+      let dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       const minX = roadX + 3, maxX = roadX + ROAD_W - 3 - player.w;
+      const offRoad = player.x < minX - 0.5 || player.x > maxX + 0.5;
+      // звонок кончился, а мы на обочине: руль наружу не работает, машину уводит обратно на дорогу
+      if (callT === 0 && offRoad) dir = player.x < minX ? 1 : -1;
+      // руль отзывчивый; в дождь машина слушается хуже
+      player.vx += (dir * STEER - player.vx) * Math.min(1, dt * (28 - 14 * rainA));
+      player.x += player.vx * dt;
       if (callT > 0) {
         player.x = clamp(player.x, minX - SHOULDER, maxX + SHOULDER);
         if ((player.x < minX || player.x > maxX) && Math.random() < dt * 20) parts.push({ x: player.x + rnd(0, 14), y: player.y + 24, vx: rnd(-20, 20), vy: rnd(10, 40), life: 0.4, color: '#c9a26b', size: 2 });
-      } else if (player.x < minX - 0.5 || player.x > maxX + 0.5) {
-        // звонок кончился, а мы на обочине — спокойно возвращаемся на дорогу
-        const back = player.x < minX ? 1 : -1;
-        player.x += back * 90 * dt;
-        if (back > 0 && player.x > minX) player.x = minX;
-        if (back < 0 && player.x < maxX) player.x = maxX;
+      } else if (offRoad) {
+        if (player.x > minX - 0.5 && player.x < maxX + 0.5) player.x = clamp(player.x, minX, maxX);
       } else if (player.x < minX || player.x > maxX) {
         player.x = clamp(player.x, minX, maxX);
         scrape(player.x < minX + 1 ? player.x : player.x + player.w, player.y + 12, true);
@@ -309,7 +313,7 @@ const Toly = (() => {
     if (nextCar <= 0) {
       spawnCar();
       const d = Math.min(1, dist / 30000);
-      nextCar = rnd(50, 105) * (1 - 0.45 * d);
+      nextCar = rnd(38, 80) * (1 - 0.4 * d);
     }
 
     // монетки, телефон, ямы
@@ -343,7 +347,7 @@ const Toly = (() => {
         if (!p.taken && hit(player, p)) {
           p.taken = true;
           callT = CALL_TIME;
-          banner = { text: 'ЗВОНИТ ЛЕСЯ!', sub: '5 секунд можно ехать по обочине', t: 1.6 };
+          banner = { text: 'ЗВОНИТ ЛЕСЯ!', sub: CALL_TIME + ' секунд можно ехать по обочине', t: 1.6 };
           Sound.play('ring');
           haptic('medium');
         }
@@ -499,11 +503,11 @@ const Toly = (() => {
     ctx.fillStyle = '#f2f2f2';
     ctx.fillRect(x0 + 3, -4, 1, H + 8);
     ctx.fillRect(x0 + ROAD_W - 4, -4, 1, H + 8);
-    const mid = x0 + 4 + 2 * LANE;
+    const mid = x0 + 4 + 3 * LANE;
     ctx.fillRect(mid - 2, -4, 1, H + 8);
     ctx.fillRect(mid + 1, -4, 1, H + 8);
     const dash = dist % 24;
-    for (const lx of [x0 + 4 + LANE, x0 + 4 + 3 * LANE]) {
+    for (const lx of [1, 2, 4, 5].map(i => x0 + 4 + i * LANE)) {
       for (let y = -24 + dash; y < H; y += 24) ctx.fillRect(lx, Math.round(y), 1, 12);
     }
   }
