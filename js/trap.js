@@ -1,7 +1,7 @@
 'use strict';
 // «Трэп хата»: выживание Серёжи, Дамира и Ромы в квартире (вид сверху, план по схеме автора).
 // Каждое утро игрок раздаёт запасы и задания, днём жильцы живут сами, игрок отвечает на события.
-// Жильцы пока — цветные метки; спрайты нарисуем по фото.
+// Жильцы и гости нарисованы по фото (js/trap-sprites.js).
 // Координаты — в логических пикселях плана (0,0 — левый верхний угол балкона Дамира).
 
 const Trap = (() => {
@@ -374,7 +374,7 @@ const Trap = (() => {
   };
   const HALL_Y = 101;
 
-  // жильцы: цвет метки (до фото), где спят/работают/курят, как быстро растёт желание курить (в день)
+  // жильцы: цвет полоски в карточке, где спят/работают/курят, как быстро растёт желание курить (в день)
   const RESIDENTS = [
     { id: 'serezha', name: 'Серёжа', color: '#3d7be0', bed: 'bedS', pc: 'pcS', smoke: 'balcD', craveRate: 46, pay: 150 },
     { id: 'damir', name: 'Дамир', color: '#5cc93a', bed: 'bedD', pc: 'pcD', smoke: 'balcD', craveRate: 18, pay: 450 },
@@ -697,24 +697,26 @@ const Trap = (() => {
   // =====================================================================
   //                               ОТРИСОВКА
   // =====================================================================
-  function token(x, y, color, label, opts) {
-    const X = Math.round(ox + x), Y = Math.round(oy + y);
-    opts = opts || {};
-    if (opts.dead) {
-      ctx.fillStyle = C.ink; ctx.fillRect(X - 5, Y - 2, 10, 5);
-      ctx.fillStyle = '#9aa3ad'; ctx.fillRect(X - 4, Y - 1, 8, 3);
-      ctx.fillStyle = C.ink; ctx.fillRect(X + 1, Y - 1, 1, 1); ctx.fillRect(X + 3, Y - 1, 1, 1);
-      return;
-    }
-    const r = opts.small ? 2 : 3;
-    ctx.fillStyle = C.ink; ctx.fillRect(X - r - 1, Y - r, (r + 1) * 2, r * 2); ctx.fillRect(X - r, Y - r - 1, r * 2, (r + 1) * 2);
-    ctx.fillStyle = color; ctx.fillRect(X - r, Y - r, r * 2, r * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(X - r, Y - r, r, 1);
+  // фигурка по фото: стоит ногами в точке (x, y); при ходьбе переступает и покачивается
+  function figure(sp, x, y, walking, label) {
+    const img = walking && Math.floor(t * 6) % 2 ? sp.walk : sp.stand;
+    const X = Math.round(ox + x - img.width / 2), Y = Math.round(oy + y + 3 - img.height - (walking && Math.floor(t * 6) % 2 ? 1 : 0));
+    ctx.drawImage(img, X, Y);
     if (label) {
       ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillStyle = C.ink; ctx.fillText(label, X + 0.5, Y - r - 1.5);
-      ctx.fillStyle = '#ffffff'; ctx.fillText(label, X, Y - r - 2);
+      ctx.fillStyle = C.ink; ctx.fillText(label, ox + x + 0.5, Y - 0.5);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(label, ox + x, Y - 1);
     }
+  }
+
+  // тело умершего: фигурка лежит на боку, бледная
+  function body(sp, x, y) {
+    const img = sp.dead;
+    ctx.save();
+    ctx.translate(Math.round(ox + x), Math.round(oy + y));
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+    ctx.restore();
   }
 
   function drawLife() {
@@ -722,9 +724,9 @@ const Trap = (() => {
     for (const pp of g.poops) { R(pp.x - 2, pp.y - 2, 5, 4, C.ink); R(pp.x - 1, pp.y - 1, 3, 2, '#6b3a17'); R(pp.x, pp.y - 3, 1, 1, '#6b3a17'); }
     for (const p of g.people) {
       if (p.away || p.hidden) continue;
-      if (!p.alive) { token(p.x, p.y, p.color, null, { dead: true }); continue; }
+      if (!p.alive) { body(TRSPR[p.id], p.x, p.y); continue; }
       const sleeping = p.act === 'спит' && !p.path.length;
-      token(p.x, p.y, p.color, p.name.toUpperCase());
+      figure(TRSPR[p.id], p.x, p.y, p.path.length > 0, p.name.toUpperCase());
       if (sleeping) { ctx.font = '4px "Press Start 2P", monospace'; ctx.fillStyle = '#ffffff'; ctx.fillText('Z', ox + p.x + 5, oy + p.y - 3 - Math.floor(t * 2) % 3); }
       else if (!p.path.length && p.act) {
         ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -732,11 +734,16 @@ const Trap = (() => {
         ctx.fillStyle = '#ffe08a'; ctx.fillText(p.act, ox + p.x, oy + p.y + 4);
       }
     }
-    for (const gu of g.guests) token(gu.x, gu.y, gu.color, gu.name.toUpperCase(), { small: true });
+    for (const gu of g.guests) {
+      const moving = gu.path.length > 0;
+      if (gu.id === 'sashasonya') { figure(TRSPR.sasha, gu.x - 5, gu.y, moving, 'САША'); figure(TRSPR.sonya, gu.x + 5, gu.y, moving, 'СОНЯ'); }
+      else figure(TRSPR[gu.id], gu.x, gu.y, moving, gu.name.toUpperCase());
+    }
     if (g.cat) {
-      const X = Math.round(ox + g.cat.x), Y = Math.round(oy + g.cat.y);
-      ctx.fillStyle = C.ink; ctx.fillRect(X - 3, Y - 2, 7, 4);
-      ctx.fillStyle = '#ff9a3c'; ctx.fillRect(X - 2, Y - 1, 5, 2); ctx.fillRect(X + 2, Y - 3, 1, 1); ctx.fillRect(X + 3, Y - 3, 1, 1);
+      const img = TRSPR.cat, flip = g.cat.path.length && g.cat.path[0].x < g.cat.x;
+      const X = Math.round(ox + g.cat.x), Y = Math.round(oy + g.cat.y - img.height / 2);
+      ctx.save(); ctx.translate(X, Y); if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, -img.width / 2, 0); ctx.restore();
     }
     ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     for (const tx of g.texts) {
@@ -752,6 +759,7 @@ const Trap = (() => {
     const w = 84;
     ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(x, y, w, 46);
     ctx.fillStyle = p.color; ctx.fillRect(x, y, 3, 46);
+    ctx.drawImage(TRSPR[p.id].stand, x + w - 14, y + 1);
     txt(p.name.toUpperCase(), x + 6, y + 3, 5, '#ffffff');
     if (!p.alive) { txt('УМЕР', x + 6, y + 14, 5, '#e33b2e'); return; }
     if (p.away) { txt('У РОДИТЕЛЕЙ', x + 6, y + 14, 4, '#9fd0f0'); txt(p.away + ' ДН.', x + 6, y + 21, 4, '#9fd0f0'); return; }
@@ -855,6 +863,10 @@ const Trap = (() => {
     overlay('tr-morning', true);
   }
 
+  // портрет для HTML-карточек — тот же пиксельный спрайт
+  const portraits = {};
+  function portrait(id) { return portraits[id] || (portraits[id] = TRSPR[id].stand.toDataURL()); }
+
   // распределение запасов и задания на день
   function renderPlan() {
     const g = game, wrap = $('tr-people');
@@ -870,7 +882,7 @@ const Trap = (() => {
       const c = document.createElement('div');
       c.className = 'tr-card' + (!p.alive ? ' dead' : p.away ? ' away' : '');
       c.style.borderColor = p.color;
-      let html = '<div class="tr-name" style="color:' + p.color + '">' + p.name.toUpperCase() + '</div>';
+      let html = '<div class="tr-name" style="color:' + p.color + '"><img class="tr-face" src="' + portrait(p.id) + '" alt="">' + p.name.toUpperCase() + '</div>';
       if (!p.alive) { c.innerHTML = html + '<div class="tr-note">☠ УМЕР</div>'; wrap.appendChild(c); continue; }
       if (p.away) { c.innerHTML = html + '<div class="tr-note">У РОДИТЕЛЕЙ ЕЩЁ ' + p.away + ' ДН.</div>'; wrap.appendChild(c); continue; }
       html += '<div class="tr-bars">' + [['сытость', 100 - p.hunger, '#ff9a3c'], ['здоровье', p.health, '#e33b2e'], ['настроение', p.happy, '#ffd23f'], ['курево', 100 - p.crave, '#9fd0f0']]
@@ -923,6 +935,7 @@ const Trap = (() => {
   function showKnock(id) {
     const f = FRIENDS[id];
     $('tr-knock-text').textContent = 'Тук-тук! ' + f.text + '.';
+    $('tr-knock-face').innerHTML = (id === 'sashasonya' ? ['sasha', 'sonya'] : [id]).map(k => '<img src="' + portrait(k) + '" alt="">').join('');
     overlay('tr-knock', true);
   }
   function answerKnock(open) {

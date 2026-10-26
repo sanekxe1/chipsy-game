@@ -320,3 +320,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tr-shop-row button[disabled] { opacity: 0.35; }
 .tr-shop-row b { color: var(--yellow); font-weight: normal; display: inline-block; min-width: 18px; text-align: center; }
 #tr-shop-list { width: 100%; min-width: 240px; }
+
+.tr-face { width: 18px; height: 26px; image-rendering: pixelated; vertical-align: middle; margin-right: 6px; }
+.tr-name { display: flex; align-items: center; }
+.tr-knock-face { display: flex; gap: 10px; margin-bottom: 8px; }
+.tr-knock-face img { width: 44px; height: 64px; image-rendering: pixelated; }
