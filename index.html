@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 <div id="app">
@@ -31,6 +31,11 @@
           <canvas id="tile-toly-icon" width="20" height="28"></canvas>
           <span class="tile-name">ТОЛЬЯТТИНСКАЯ СУЕТА</span>
           <span class="tile-desc">гонка на Гранте по трассе</span>
+        </button>
+        <button class="tile purple" id="tile-trap">
+          <canvas id="tile-trap-icon" width="16" height="16"></canvas>
+          <span class="tile-name">ТРЭП ХАТА</span>
+          <span class="tile-desc">выживание в студенческой квартире · скоро</span>
         </button>
       </div>
     </div>
@@ -100,6 +105,13 @@
         </button>
       </div>
     </div>
+  </section>
+
+  <!-- Трэп хата: пока только квартира -->
+  <section id="scr-trap" class="screen">
+    <div id="stage3" class="stage"><canvas id="cv3"></canvas></div>
+    <button class="btn small trap-back" data-back="menu">НАЗАД</button>
+    <div class="trap-note">ТРЭП ХАТА · квартира готова, жильцы скоро заселятся</div>
   </section>
 
   <!-- Тольяттинская суета: гонка -->
@@ -207,13 +219,14 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=13"></script>
-<script src="js/sprites.js?v=13"></script>
-<script src="js/worlds.js?v=13"></script>
-<script src="js/levels.js?v=13"></script>
-<script src="js/game.js?v=13"></script>
-<script src="js/toly-sprites.js?v=13"></script>
-<script src="js/toly.js?v=13"></script>
-<script src="js/main.js?v=13"></script>
+<script src="js/audio.js?v=14"></script>
+<script src="js/sprites.js?v=14"></script>
+<script src="js/worlds.js?v=14"></script>
+<script src="js/levels.js?v=14"></script>
+<script src="js/game.js?v=14"></script>
+<script src="js/toly-sprites.js?v=14"></script>
+<script src="js/toly.js?v=14"></script>
+<script src="js/trap.js?v=14"></script>
+<script src="js/main.js?v=14"></script>
 </body>
 </html>

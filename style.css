@@ -276,3 +276,12 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .flash-btn b { font-weight: normal; }
 .flash-btn.cooldown { background: rgba(200, 200, 210, 0.45); }
 .flash-btn.active { background: #fff3b0; box-shadow: 0 0 18px #fff3b0; }
+
+/* ---------- Трэп хата ---------- */
+.tile.purple { background: #a98bd6; box-shadow: inset -4px -4px 0 #6b4a9e, inset 4px 4px 0 #c9b3ee, 0 5px 0 var(--ink); }
+.tile.purple .tile-desc { color: #2e1a4a; }
+#scr-trap { padding: 0; background: #3b3448; }
+.trap-back { position: absolute; top: calc(8px + var(--st)); left: calc(10px + var(--sl)); }
+.trap-note { position: absolute; top: calc(14px + var(--st)); right: calc(14px + var(--sr)); max-width: 150px; text-align: right; line-height: 1.6; color: #fff; font-size: 8px; text-shadow: 2px 2px 0 var(--ink); }
+.tiles { gap: 10px; }
+.tile { padding: 8px 10px; }

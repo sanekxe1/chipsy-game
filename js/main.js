@@ -45,6 +45,7 @@
     }
     if (Game.running) Game.layout(false);
     if (Toly.running) Toly.layout(false);
+    if (Trap.running) Trap.layout();
   }
   window.addEventListener('resize', onOrientation);
 
@@ -76,6 +77,7 @@
     if (name === 'mode') renderMode();
     if (name === 'levels') renderLevels();
     if (name === 'toly') renderToly();
+    if (name === 'trap') Trap.start(); else if (Trap.running) Trap.stop();
     if (tgVer('6.1')) safe(() => (name === 'menu' ? tg.BackButton.hide() : tg.BackButton.show()));
   }
 
@@ -90,7 +92,7 @@
     else if (current === 'game') {
       if (overlayOpen()) exitGame();
       else doPause();
-    } else if (current === 'toly') show('menu');
+    } else if (current === 'toly' || current === 'trap') show('menu');
     else if (current === 'toly-game') {
       if (overlayOpen()) tolyExit();
       else tolyPause();
@@ -128,6 +130,14 @@
     c.drawImage(SPR.kibble, 182, gy - 10);
     drawInto($('#tile-icon'), SPR.chipsPack, null);
     drawInto($('#tile-toly-icon'), TSPR.granta, null);
+    // иконка «Трэп хаты»: домик с дымком
+    const ti = $('#tile-trap-icon').getContext('2d');
+    ti.fillStyle = '#1b1626'; ti.fillRect(2, 6, 12, 9); ti.fillRect(1, 5, 14, 2); ti.fillRect(4, 3, 8, 2); ti.fillRect(6, 1, 4, 2);
+    ti.fillStyle = '#d9a76e'; ti.fillRect(3, 7, 10, 7);
+    ti.fillStyle = '#e33b2e'; ti.fillRect(2, 5, 12, 1); ti.fillRect(5, 3, 6, 2); ti.fillRect(7, 2, 2, 1);
+    ti.fillStyle = '#4cc3f0'; ti.fillRect(4, 8, 3, 3);
+    ti.fillStyle = '#6b4420'; ti.fillRect(9, 9, 3, 5);
+    ti.fillStyle = '#c9ced6'; ti.fillRect(12, 0, 1, 1); ti.fillRect(13, 1, 1, 1);
     drawInto($('#rotate-cat'), SPR.chips.run[0], null);
   }
 
@@ -234,6 +244,8 @@
     show('toly');
   }
   Toly.init($('#cv2'), $('#stage2'));
+  Trap.init($('#cv3'), $('#stage3'));
+  $('#tile-trap').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('trap'); });
   Toly.onGameOver = r => {
     $('#t-score').textContent = r.score;
     $('#t-best').textContent = r.best;
