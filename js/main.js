@@ -427,9 +427,10 @@
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) return;
+    if (!document.hidden) { if (current === 'trap' && !Trap.running) Trap.start(); return; }
     if (current === 'game') doPause();
     if (current === 'toly-game') tolyPause();
+    if (current === 'trap') Trap.stop();
   });
 
   updateSoundLabels();

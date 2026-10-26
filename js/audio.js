@@ -37,6 +37,16 @@ const Sound = (() => {
   ).split(' ');
   const RACE_ROOTS = ['A2', 'F2', 'G2', 'E2'];
 
+  // Трэп-бит для «Трэп хаты»: до минор, 140 BPM в половинном размере, 808-бас и дробь хэтов
+  const TRAP_STEP = 60 / 140 / 4;
+  const TRAP_LEAD = (
+    'C5 . . D#5 . . G5 . F5 . D#5 . . . . . ' +
+    'C5 . . D#5 . . G5 . G#5 . G5 . F5 . D#5 . ' +
+    'C5 . . D#5 . . G5 . F5 . D#5 . . . . . ' +
+    'G#4 . . C5 . . D#5 . D5 . . . . . . .'
+  ).split(' ');
+  const TRAP_BASS = ['C2', 'C2', 'G#1', 'G1'];
+
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -182,9 +192,23 @@ const Sound = (() => {
     step++;
   }
 
+  function trapStep() {
+    const i = step % 64, bar = i >> 4, s16 = i % 16;
+    const m = TRAP_LEAD[i];
+    if (m !== '.') tone('triangle', f(m), null, nextTime, TRAP_STEP * 2.5, 0.22, musicGain);
+    // 808: длинный бас с падением высоты на сильных долях
+    if (s16 === 0 || s16 === 10) tone('sine', f(TRAP_BASS[bar]) * 2, f(TRAP_BASS[bar]), nextTime, TRAP_STEP * 6, 0.75, musicGain);
+    if (s16 === 8) noise(nextTime, 0.14, 0.4, 1600, musicGain, 0.6);           // снейр на «три»
+    // хэты: восьмые, а в конце такта — дробь
+    if (s16 % 2 === 0 || (bar % 2 === 1 && s16 >= 12)) noise(nextTime, 0.025, 0.12, 9500, musicGain, 2);
+    nextTime += TRAP_STEP;
+    step++;
+  }
+
   function schedule() {
     while (nextTime < ctx.currentTime + 0.15) {
       if (track === 'race') { raceStep(); continue; }
+      if (track === 'trap') { trapStep(); continue; }
       const i = step % 64, bar = i >> 3;
       const m = MEL[i];
       if (m !== '-') tone('square', f(m), null, nextTime, STEP * 0.9, 0.16, musicGain);

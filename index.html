@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 <div id="app">
@@ -35,7 +35,7 @@
         <button class="tile purple" id="tile-trap">
           <canvas id="tile-trap-icon" width="16" height="16"></canvas>
           <span class="tile-name">ТРЭП ХАТА</span>
-          <span class="tile-desc">выживание в студенческой квартире · скоро</span>
+          <span class="tile-desc">выживание в студенческой квартире</span>
         </button>
       </div>
     </div>
@@ -107,11 +107,66 @@
     </div>
   </section>
 
-  <!-- Трэп хата: пока только квартира -->
+  <!-- Трэп хата -->
   <section id="scr-trap" class="screen">
     <div id="stage3" class="stage"><canvas id="cv3"></canvas></div>
     <button class="btn small trap-back" data-back="menu">НАЗАД</button>
-    <div class="trap-note">ТРЭП ХАТА · квартира готова, жильцы скоро заселятся</div>
+    <div class="trap-ctl">
+      <button class="btn small" id="tr-speed">×1</button>
+      <button class="btn small" id="tr-pause">II</button>
+    </div>
+
+    <div class="overlay" id="tr-intro">
+      <div class="panel wide">
+        <h2 class="h2">ТРЭП ХАТА</h2>
+        <p class="hint">Серёжа, Дамир и Рома живут в одной квартире. Каждое утро раздавай еду, сигареты и задания, днём реагируй на события. Продержитесь как можно больше дней!</p>
+        <p class="hint">Рекорд: <b id="tr-intro-best">0</b> дн.</p>
+        <button class="btn red" id="tr-new">ЗАСЕЛИТЬСЯ</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="tr-morning">
+      <div class="panel xwide">
+        <h2 class="h2" id="tr-day">ДЕНЬ 1</h2>
+        <div class="tr-log" id="tr-log"></div>
+        <div class="tr-event" id="tr-event"></div>
+        <div class="tr-people" id="tr-people"></div>
+        <p class="hint" id="tr-stock"></p>
+        <button class="btn red" id="tr-go">НАЧАТЬ ДЕНЬ</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="tr-shop">
+      <div class="panel">
+        <h2 class="h2">МАГАЗИН</h2>
+        <div id="tr-shop-list"></div>
+        <p class="hint" id="tr-shop-total"></p>
+        <button class="btn red" id="tr-buy">КУПИТЬ И ПОЙТИ ДОМОЙ</button>
+      </div>
+    </div>
+
+    <div class="overlay" id="tr-knock">
+      <div class="panel">
+        <h2 class="h2">СТУЧАТ В ДВЕРЬ</h2>
+        <p class="hint" id="tr-knock-text"></p>
+        <div class="btn-row">
+          <button class="btn" id="tr-knock-yes">ВПУСТИТЬ</button>
+          <button class="btn" id="tr-knock-no">НАС НЕТ ДОМА</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="tr-over">
+      <div class="panel">
+        <h2 class="h2">ХАТА ОПУСТЕЛА</h2>
+        <div class="newrec" id="tr-over-new">НОВЫЙ РЕКОРД!</div>
+        <div class="stats one">
+          <div><span>ПРОЖИТО ДНЕЙ</span><b id="tr-over-days">0</b></div>
+          <div><span>РЕКОРД</span><b id="tr-over-best">0</b></div>
+        </div>
+        <button class="btn" id="tr-again">ЕЩЁ РАЗ</button>
+      </div>
+    </div>
   </section>
 
   <!-- Тольяттинская суета: гонка -->
@@ -219,14 +274,14 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=15"></script>
-<script src="js/sprites.js?v=15"></script>
-<script src="js/worlds.js?v=15"></script>
-<script src="js/levels.js?v=15"></script>
-<script src="js/game.js?v=15"></script>
-<script src="js/toly-sprites.js?v=15"></script>
-<script src="js/toly.js?v=15"></script>
-<script src="js/trap.js?v=15"></script>
-<script src="js/main.js?v=15"></script>
+<script src="js/audio.js?v=16"></script>
+<script src="js/sprites.js?v=16"></script>
+<script src="js/worlds.js?v=16"></script>
+<script src="js/levels.js?v=16"></script>
+<script src="js/game.js?v=16"></script>
+<script src="js/toly-sprites.js?v=16"></script>
+<script src="js/toly.js?v=16"></script>
+<script src="js/trap.js?v=16"></script>
+<script src="js/main.js?v=16"></script>
 </body>
 </html>
