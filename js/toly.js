@@ -13,7 +13,7 @@ const Toly = (() => {
   const STEER = 170;            // скорость руления, px/с
   const PLAYER_BOTTOM = H - 14;
   const CITY_TIME = 7, CITY_SLOW = 0.8;
-  const FLASH_TIME = 3, FLASH_CD = 12;
+  const FLASH_TIME = 4, FLASH_CD = 10;
   const CALL_TIME = 7;
   const HOLE_PENALTY = 50;
   const CYCLE = 80;             // секунд на день → вечер → ночь → утро
@@ -134,7 +134,7 @@ const Toly = (() => {
       if (c.lane === 2) c.lane = 1;
       else if (c.lane === 3) c.lane = 4;
     }
-    banner = { text: 'ДАЛЬНИЙ!', sub: 'Центр свободен на 3 секунды', t: 1.4 };
+    banner = { text: 'ДАЛЬНИЙ!', sub: 'Центр свободен на ' + FLASH_TIME + ' секунды', t: 1.4 };
     Sound.play('flash');
     haptic('medium');
     flashUI();
