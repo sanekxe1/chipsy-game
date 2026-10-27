@@ -403,9 +403,23 @@ const Trap = (() => {
     polina: { name: 'Полина', color: '#c9a0ff', text: 'Пришла Полина, девушка Ромы' },
     vika: { name: 'Вика', color: '#ff9a3c', text: 'Пришла Вика, девушка Дамира — обещает приготовить ужин' },
     gf: { name: 'Девушка Серёжи', color: '#9fd0f0', text: 'Пришла девушка Серёжи' },
+    savely: { name: 'Савелий', color: '#d8322a', text: 'Савелий из Тольятти заехал на своей Гранте' },
   };
   const GF_DAY = 10;               // на 10-й день у Серёжи появляется девушка
-  const PARTY_DAY = 15;            // на 15-й день — разовая возможность устроить тусовку
+  const PARTY_DAY = 10;            // тусовку предлагают не раньше 10-го дня…
+  const PARTY_GAP = 5;             // …и не чаще, чем раз в 5 дней
+
+  // ---------------- Сложность растёт с каждым днём ----------------
+  // всё считается от номера дня, поэтому старые сохранения подхватывают её сами
+  const dayN = () => game ? game.day : 1;
+  const inflation = () => 1 + Math.min(1, (dayN() - 1) * 0.01);            // цены +1% в день, максимум ×2
+  const priceOf = base => Math.round(base * inflation() / 10) * 10;
+  const RENT_EVERY = 7;
+  const rentAmount = () => Math.min(4500, 1500 + 300 * (Math.floor(dayN() / RENT_EVERY) - 1)); // аренда раз в неделю, растёт
+  const wear = () => 1 + Math.min(0.5, (dayN() - 1) / 120);                // голод, курево и скука быстрее, до +50%
+  const moodBar = () => Math.min(60, 10 + dayN() * 0.75);                 // ниже этого настроения заказчик платит меньше
+  const calmChance = () => 0.4 - Math.min(0.25, dayN() * 0.004);           // шанс спокойного утра падает с 40% до 15%
+  const illBonus = () => Math.min(0.07, dayN() * 0.001);                   // болеют чаще
   // к кому гость приходит и рядом с кем держится
   const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
   // места на диване и ковре у телевизора Серёжи, где все собираются
@@ -455,10 +469,10 @@ const Trap = (() => {
   function snapshot() {
     const g = game;
     return {
-      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, partyOffered: !!g.partyOffered, poops: g.poops, log: g.log,
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, flood: !!g.flood, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
-        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill,
+        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill, broken: p.broken || 0,
       })),
     };
   }
@@ -482,7 +496,7 @@ const Trap = (() => {
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
-      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null,
+      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, flood: false,
     };
     simPaused = false;
   }
@@ -496,7 +510,9 @@ const Trap = (() => {
   function continueGame(d) {
     createGame();
     const g = game;
-    g.day = d.day; g.res = Object.assign({ meds: 0 }, d.res); g.gf = !!d.gf; g.partyOffered = !!d.partyOffered; g.poops = d.poops || []; g.log = d.log || [];
+    g.day = d.day; g.res = Object.assign({ meds: 0 }, d.res); g.gf = !!d.gf; g.flood = !!d.flood;
+    // старые сохранения: была одна тусовка на 15-й день
+    g.lastParty = d.lastParty || (d.partyOffered ? d.day : 0); g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -508,6 +524,8 @@ const Trap = (() => {
 
   const present = () => game.people.filter(p => p.alive && !p.away);
   const byId = id => game.people.find(p => p.id === id);
+  // весь день занят поиском телефона или ремонтом — других заданий нет
+  const busy = p => p.flags.search || p.flags.repair;
   const say = (p, text) => game.texts.push({ x: p.x, y: p.y - 10, text, life: 1.4 });
   function log(s) { game.log.push(s); }
 
@@ -566,7 +584,9 @@ const Trap = (() => {
       }
       if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.path = []; p.hidden = false; }
       p.flags = {};
+      if (p.broken > 0) p.broken--;
     }
+    payRent();
     illnessMorning();
     // автосохранение: если закрыть игру днём, она продолжится с этого утра
     saveGame();
@@ -574,17 +594,48 @@ const Trap = (() => {
     openMorning();
   }
 
+  // раз в неделю хозяин квартиры забирает аренду; не хватает денег — забирает всё и ругается
+  function payRent() {
+    const g = game;
+    if (g.day < RENT_EVERY || g.day % RENT_EVERY) return;
+    const rent = rentAmount();
+    if (g.res.money >= rent) { g.res.money -= rent; log('🏠 Хозяин забрал аренду: −' + rent + '₽'); return; }
+    log('🏠 Аренда ' + rent + '₽, а было только ' + g.res.money + '₽ — хозяин забрал всё и наорал. Всем −25 настроения');
+    g.res.money = 0;
+    for (const p of present()) p.happy = cl(p.happy - 25);
+  }
+
+  // кто будет чинить потоп: лучше Дамир, иначе любой, кто дома
+  const fixer = () => { const D = byId('damir'); return D.alive && !D.away ? D : present()[0]; };
+  function floodEvent(first) {
+    const g = game, master = priceOf(1500), parts = priceOf(400), f = fixer();
+    return {
+      title: first ? '💧 ПОТОП!' : '💧 В квартире всё ещё потоп',
+      text: (first ? 'Прорвало трубу в ванной — вода по всей квартире.<br>' : 'Пол мокрый, пахнет сыростью.<br>') +
+        'Пока не починить — <span class="ev-dn">всем −настроение каждый день</span> <span class="ev-dn">чаще болеют</span>.',
+      choices: [
+        { label: 'ВЫЗВАТЬ МАСТЕРА −' + master + '₽', ok: () => g.res.money >= master, fn: () => { g.res.money -= master; g.flood = false; log('Мастер починил трубу'); } },
+        ...(f ? [{ label: f.name.toUpperCase() + ' ЧИНИТ ВЕСЬ ДЕНЬ −' + parts + '₽', ok: () => g.res.money >= parts, fn: () => { g.res.money -= parts; f.flags.repair = true; } }] : []),
+        { label: 'ПОТОМ', fn: () => {} },
+      ],
+    };
+  }
+
   // утреннее событие: либо сразу случается, либо требует выбора
   function rollEvent() {
     const g = game, S = byId('serezha'), D = byId('damir'), Rm = byId('roma');
-    // тусовка — строго на 15-й день, раньше прочих событий
-    if (g.day >= PARTY_DAY && !g.partyOffered) {
-      g.partyOffered = true;
+    // пока не починили потоп — каждое утро напоминание (важнее тусовки и случайных событий)
+    if (g.flood && !forceEvent) return floodEvent(false);
+    // тусовка: не раньше 10-го дня и не чаще раза в 5 дней, раньше прочих событий
+    const partyReady = g.day >= PARTY_DAY && g.day - (g.lastParty || 0) >= PARTY_GAP;
+    if (forceEvent === 'party' || (!forceEvent && partyReady && Math.random() < 0.35)) {
+      forceEvent = null;
+      g.lastParty = g.day;
       return {
         title: '🎉 ТУСОВКА?',
-        text: 'Вы продержались 15 дней — можно устроить тусовку! Придут сразу все друзья.<br>' +
+        text: 'Можно устроить тусовку! Придут сразу все друзья.<br>' +
           '<span class="ev-up">+ курево у всех на максимум</span> <span class="ev-up">+ настроение у всех на максимум</span><br>' +
-          '<span class="ev-dn">− 30% здоровья у каждого</span> <span class="ev-dn">− 30% общего бюджета</span><br>Такой шанс бывает только один раз.',
+          '<span class="ev-dn">− 30% здоровья у каждого</span> <span class="ev-dn">− 30% общего бюджета</span><br>Следующий шанс — не раньше чем через ' + PARTY_GAP + ' дней.',
         choices: [
           { label: 'УСТРОИТЬ ТУСОВКУ', fn: () => { g.partyToday = true; } },
           { label: 'НЕ СЕГОДНЯ', fn: () => {} },
@@ -595,23 +646,58 @@ const Trap = (() => {
       g.gf = true; S.happy = cl(S.happy + 40);
       return { title: 'Серёжа влюбился!', text: 'Серёжа познакомился с девушкой. Теперь она иногда заходит в гости — Серёже от этого очень хорошо.' };
     }
-    if (!forceEvent && Math.random() < 0.4) return null;
+    if (!forceEvent && Math.random() < calmChance()) return null;
     const pool = [];
     if (Rm.alive && !Rm.away) pool.push('phone');
     if (S.alive && !S.away) pool.push('oversleep');
     if (D.alive && !D.away && g.day > 2) pool.push('trip');
     pool.push('lights', 'pizza');
+    // со временем добавляются новые неприятности, и их становится больше
+    if (g.day >= 6) pool.push('flood');
+    if (g.day >= 8) pool.push('laptop');
+    if (g.day >= 10) pool.push('latepay');
+    if (g.day >= 12) pool.push('police');
+    if (g.day >= 25) pool.push('flood', 'laptop', 'police');
+    if (g.day >= 45) pool.push('lights', 'latepay', 'police');
     const k = forceEvent || pick(pool);
     forceEvent = null;
-    if (k === 'phone') return {
-      title: 'Рома потерял телефон',
-      text: 'Опять. Где-то в квартире… или нет.<br>Искать весь день — Рома ничего не сделает и не заработает. Купить новый — −800₽. Забить — −20 настроения Роме.',
-      choices: [
-        { label: 'ИСКАТЬ ВЕСЬ ДЕНЬ', fn: () => { Rm.flags.search = true; } },
-        { label: 'КУПИТЬ НОВЫЙ −800₽', ok: () => g.res.money >= 800, fn: () => { g.res.money -= 800; } },
-        { label: 'ЗАБИТЬ · −20 НАСТРОЕНИЯ', fn: () => { Rm.happy = cl(Rm.happy - 20); } },
-      ],
-    };
+    if (k === 'phone') {
+      const cost = priceOf(800);
+      return {
+        title: 'Рома потерял телефон',
+        text: 'Опять. Где-то в квартире… или нет.<br>Искать весь день — Рома ничего не сделает и не заработает. Купить новый — −' + cost + '₽. Забить — −40 настроения Роме.',
+        choices: [
+          { label: 'ИСКАТЬ ВЕСЬ ДЕНЬ', fn: () => { Rm.flags.search = true; } },
+          { label: 'КУПИТЬ НОВЫЙ −' + cost + '₽', ok: () => g.res.money >= cost, fn: () => { g.res.money -= cost; } },
+          { label: 'ЗАБИТЬ · −40 НАСТРОЕНИЯ', fn: () => { Rm.happy = cl(Rm.happy - 40); } },
+        ],
+      };
+    }
+    if (k === 'flood') { g.flood = true; return floodEvent(true); }
+    if (k === 'laptop') {
+      const p = pick(present().filter(x => !x.broken)) || present()[0], cost = priceOf(1200);
+      if (!p) return null;
+      return {
+        title: '💻 Сломался компьютер',
+        text: 'У ' + (p.id === 'serezha' ? 'Серёжи' : p.id === 'damir' ? 'Дамира' : 'Ромы') + ' сдох компьютер. Без него монтировать нельзя.',
+        choices: [
+          { label: 'ПОЧИНИТЬ −' + cost + '₽', ok: () => g.res.money >= cost, fn: () => { g.res.money -= cost; } },
+          { label: 'БЕЗ КОМПЬЮТЕРА 3 ДНЯ', fn: () => { p.broken = 3; } },
+        ],
+      };
+    }
+    if (k === 'police') {
+      const fine = priceOf(700);
+      return {
+        title: '🚓 Соседи вызвали полицию',
+        text: 'Ночью было слишком шумно. Участковый грозит штрафом.',
+        choices: [
+          { label: 'ЗАПЛАТИТЬ ШТРАФ −' + fine + '₽', ok: () => g.res.money >= fine, fn: () => { g.res.money -= fine; } },
+          { label: 'ДОГОВОРИТЬСЯ · ВСЕМ −15 НАСТРОЕНИЯ', fn: () => { present().forEach(p => { p.happy = cl(p.happy - 15); }); } },
+        ],
+      };
+    }
+    if (k === 'latepay') { g.flags = { latePay: true }; return { title: 'Заказчик тянет с оплатой', text: 'Сегодня за монтаж заплатят только половину.' }; }
     if (k === 'oversleep') { S.flags.slept = true; S.happy = cl(S.happy + 5); return { title: 'Серёжа проспал', text: 'Серёжа проспал полдня. Сегодня он сделает вдвое меньше.' }; }
     if (k === 'trip') { D.away = 2; return { title: 'Дамир уехал', text: 'Дамир уехал к родителям на 2 дня. Вернётся с едой.' }; }
     if (k === 'lights') { g.flags = { noPower: true }; return { title: 'Отключили свет', text: 'Компьютеры не работают — сегодня монтировать не получится.' }; }
@@ -636,7 +722,7 @@ const Trap = (() => {
     }
     for (const p of home) {
       if (p.ill) continue;
-      const chance = 0.05 + (p.health < 50 ? 0.06 : 0) + (p.hunger > 80 ? 0.04 : 0);
+      const chance = 0.05 + illBonus() + (g.flood ? 0.04 : 0) + (p.health < 50 ? 0.06 : 0) + (p.hunger > 80 ? 0.04 : 0);
       if (Math.random() < chance) {
         const r = Math.random(), type = r < 0.5 ? 'cold' : r < 0.75 ? 'poison' : 'flu';
         infect(p, type);
@@ -653,7 +739,7 @@ const Trap = (() => {
     g.flagsToday = g.flags || {};
     g.flags = {};
     g.shopCart = cart;
-    const cooks = present().filter(p => p.task === 'cook' && !p.flags.search);
+    const cooks = present().filter(p => p.task === 'cook' && !busy(p));
     const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) : 0;
     for (const p of present()) {
       if (p.plan.food && g.res.food > 0) { g.res.food--; p.hunger = cl(p.hunger - 45 - cookBonus); p.flags.ate = true; }
@@ -685,13 +771,14 @@ const Trap = (() => {
     const s = [];
     if (p.flags.ate) s.push({ at: 0.03, poi: 'table', act: 'ест' });
     if (p.flags.smoked) s.push({ at: 0.11, poi: p.smoke, act: 'курит' });
-    const main = p.flags.search ? 'search' : p.task;
+    const main = p.flags.search ? 'search' : p.flags.repair ? 'repair' : p.task;
     if (main === 'work') s.push({ at: 0.18, poi: p.pc, act: 'монтаж' });
     else if (main === 'cook') { s.push({ at: 0.16, poi: 'stove', act: 'готовит' }); s.push({ at: 0.45, poi: 'table', act: 'ест' }); }
     else if (main === 'rest') s.push({ at: 0.18, poi: p.id === 'serezha' ? 'pcS' : 'tv', act: p.id === 'serezha' ? 'дота' : 'отдыхает' });
     else if (main === 'sport') s.push({ at: 0.18, poi: 'sport', act: 'качается' });
     else if (main === 'shop') s.push({ at: 0.14, poi: 'door', act: 'в магазин', shop: true });
     else if (main === 'search') for (let a = 0.16; a < 0.7; a += 0.09) s.push({ at: a, poi: pick(['hallMid', 'table', 'tv', 'bath', 'laundry', p.bed]), act: 'ищет телефон' });
+    else if (main === 'repair') for (let a = 0.16; a < 0.7; a += 0.12) s.push({ at: a, poi: pick(['bath', 'bath', 'hallMid', 'laundry']), act: 'чинит трубу' });
     s.push({ at: 0.74, poi: pick(['tv', 'table', 'hallEnd']), act: 'болтает' });
     s.push({ at: 0.86, poi: p.bed, act: 'спит' });
     p.sched = s;
@@ -729,9 +816,10 @@ const Trap = (() => {
 
       // параметры
       const asleep = ph >= 0.9;
-      p.hunger = cl(p.hunger + 30 * dd);
-      p.crave = cl(p.crave + p.craveRate * dd);
-      p.happy = cl(p.happy - 9 * dd - g.poops.length * 12 * dd);
+      const k = wear();
+      p.hunger = cl(p.hunger + 30 * k * dd);
+      p.crave = cl(p.crave + p.craveRate * k * dd);
+      p.happy = cl(p.happy - 9 * k * dd - g.poops.length * 12 * dd - (g.flood ? 10 * dd : 0));
       if (p.hunger >= 100) p.health = cl(p.health - 30 * dd);
       if (p.crave >= 100) { p.happy = cl(p.happy - 20 * dd); p.health = cl(p.health - 4 * dd); }
       if (p.happy <= 0) p.health = cl(p.health - 10 * dd);
@@ -800,16 +888,20 @@ const Trap = (() => {
     let earned = 0;
     // кто болел и отдыхал — поправляется на день быстрее
     for (const p of present()) {
-      if (p.ill && p.task === 'rest' && !p.flags.search) { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' отлежался и выздоровел'); } }
+      if (p.ill && p.task === 'rest' && !busy(p)) { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' отлежался и выздоровел'); } }
     }
+    if (g.flood && present().some(p => p.flags.repair)) { g.flood = false; log('🔧 Трубу починили — потопа больше нет'); }
     for (const p of present()) {
-      if (p.task !== 'work' || p.flags.search) continue;
+      if (p.task !== 'work' || busy(p)) continue;
+      if (p.broken) { log(p.name + ' без компьютера — монтировать не на чем'); continue; }
       if (p.ill && ILLS[p.ill.type].pay === 0) { log(p.name + ' болеет гриппом и не смог работать'); continue; }
       if (g.flagsToday.noPower) continue;
       let pay = p.id === 'serezha' ? 150 + 60 * p.skill : p.pay;
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
+      if (p.happy < moodBar()) { pay = Math.round(pay * 0.6); log('Заказчику не понравился монтаж ' + (p.id === 'serezha' ? 'Серёжи' : p.id === 'damir' ? 'Дамира' : 'Ромы') + ' — без настроения работа хуже (−40%)'); }
+      if (g.flagsToday.latePay) pay = Math.round(pay / 2);
       if (p.ill) { pay = Math.round(pay * ILLS[p.ill.type].pay); log(p.name + ' работал больным — заплатили меньше'); }
       if (p.id === 'roma' && Math.random() < 0.2) { pay = Math.round(pay / 2); log('Рома опоздал на съёмку и потерял флешку — заплатили половину'); }
       if (p.id === 'serezha') {
@@ -832,6 +924,7 @@ const Trap = (() => {
     if (Rm.alive) who.push('polina');
     if (D.alive && !D.away) who.push('vika');
     if (g.gf && S.alive) who.push('gf', 'gf');
+    if (g.day >= 4) who.push('savely');
     // кто уже в гостях, второй раз не стучит
     const free = who.filter(id => !g.guests.some(gu => gu.id === id));
     if (!force && !free.length) return;
@@ -858,7 +951,20 @@ const Trap = (() => {
     const all = present();
     if (id === 'anya') { g.res.money += 500; if (g.res.food > 0) g.res.food--; log('Аня принесла заказ на съёмку: +500₽ (и съела порцию)'); }
     if (id === 'sashasonya') { g.res.food += 2; all.forEach(p => { p.happy = cl(p.happy + 12); }); log('Саша и Соня принесли чипсы: +2 еды, всем веселее'); }
-    if (id === 'polina') { const r = byId('roma'); r.happy = cl(r.happy + 30); if (g.res.food > 0) g.res.food--; if (g.res.cigs > 0) g.res.cigs--; log('Полина зашла к Роме: Роме сильно лучше (съела еду, стрельнула сигарету)'); }
+    if (id === 'polina') {
+      const r = byId('roma'); r.happy = cl(r.happy + 30);
+      // чаще объедает, но иногда приходит с пакетом
+      if (Math.random() < 0.3) { g.res.food++; g.res.cigs++; log('Полина зашла к Роме с пакетом: +1 еда, +1 сигареты, Роме сильно лучше'); }
+      else { if (g.res.food > 0) g.res.food--; if (g.res.cigs > 0) g.res.cigs--; log('Полина зашла к Роме: Роме сильно лучше (съела еду, стрельнула сигарету)'); }
+    }
+    if (id === 'savely') {
+      const parts = [];
+      if (Math.random() < 0.5) { g.res.energy += 2; parts.push('привёз 2 энергетика'); }
+      else if (g.res.energy > 0) { g.res.energy--; parts.push('выпил энергетик'); }
+      if (Math.random() < 0.5 && g.res.cigs > 0) { g.res.cigs--; parts.push('стрельнул сигарету'); }
+      else parts.push('курил свои');
+      log('Савелий заехал: ' + parts.join(', '));
+    }
     if (id === 'vika') { const d = byId('damir'); d.happy = cl(d.happy + 30); g.res.food += 2; all.forEach(p => { p.hunger = cl(p.hunger - 15); }); log('Вика приготовила ужин на всех: +2 еды, все сыты'); }
     if (id === 'gf') { const s = byId('serezha'); s.happy = cl(s.happy + 30); if (g.res.food > 0) g.res.food--; log('Девушка Серёжи зашла в гости: Серёже хорошо'); }
     Sound.play('checkpoint');
@@ -885,10 +991,10 @@ const Trap = (() => {
     log('Все собрались у Серёжи смотреть телевизор');
   }
 
-  // разовая тусовка на 15-й день: приходят все друзья
+  // тусовка: приходят все друзья
   function startParty() {
     const g = game;
-    const ids = ['anya', 'sashasonya', 'polina', 'vika'].concat(g.gf ? ['gf'] : []);
+    const ids = ['anya', 'sashasonya', 'polina', 'vika', 'savely'].concat(g.gf ? ['gf'] : []);
     ids.forEach((id, k) => { const gu = addGuest(id, 0.86); gu.x += k * 3; });
     for (const p of present()) {
       p.crave = 0;
@@ -951,8 +1057,11 @@ const Trap = (() => {
     ctx.restore();
   }
 
+  // лужи на полу во время потопа: ванная, коридор, прихожая
+  const FLOOD = [[50, 122, 22, 14], [40, 97, 40, 9], [96, 99, 44, 8], [6, 126, 16, 12], [146, 98, 24, 8]];
   function drawLife() {
     const g = game;
+    if (g.flood) for (const [x, y, w, h] of FLOOD) { R(x, y, w, h, 'rgba(70,150,230,0.45)'); R(x + 2, y + 1, Math.max(2, w - 8), 1, 'rgba(220,240,255,0.6)'); }
     for (const pp of g.poops) { R(pp.x - 2, pp.y - 2, 5, 4, C.ink); R(pp.x - 1, pp.y - 1, 3, 2, '#6b3a17'); R(pp.x, pp.y - 3, 1, 1, '#6b3a17'); }
     for (const p of g.people) {
       if (p.away || p.hidden) continue;
@@ -1128,7 +1237,9 @@ const Trap = (() => {
         return '<button data-k="' + k + '" class="tr-it' + (p.plan[k] ? ' on' : '') + '"' + (can ? '' : ' disabled') + '>' + ic + '</button>';
       }).join('') + '</div>';
       const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : []);
+      if (p.broken) html += '<div class="tr-ill">💻 БЕЗ КОМПЬЮТЕРА ЕЩЁ ' + p.broken + ' ДН. — монтаж не принесёт денег</div>';
       if (p.flags.search) html += '<div class="tr-ill">🔍 ИЩЕТ ТЕЛЕФОН ВЕСЬ ДЕНЬ — других заданий нет</div>';
+      else if (p.flags.repair) html += '<div class="tr-ill">🔧 ЧИНИТ ТРУБУ ВЕСЬ ДЕНЬ — других заданий нет</div>';
       else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '">' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
       c.innerHTML = html;
       c.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { p.plan[b.dataset.k] = !p.plan[b.dataset.k]; Sound.play('click'); renderPlan(); });
@@ -1136,7 +1247,9 @@ const Trap = (() => {
       wrap.appendChild(c);
     }
     const r = g.res;
-    $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy + ' · лекарства ' + r.meds;
+    const toRent = RENT_EVERY - g.day % RENT_EVERY;
+    $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy + ' · лекарства ' + r.meds +
+      ' · аренда ' + (toRent === RENT_EVERY ? 'через неделю' : 'через ' + toRent + ' дн.') + ' (' + Math.min(4500, 1500 + 300 * Math.floor((g.day + toRent) / RENT_EVERY - 1)) + '₽)';
     $('tr-go').disabled = !!waiting;
   }
 
@@ -1144,7 +1257,7 @@ const Trap = (() => {
     Sound.init();
     overlay('tr-morning', false);
     // кто ищет телефон, в магазин не пойдёт — если других покупателей нет, экран магазина не нужен
-    if (present().some(p => p.task === 'shop' && !p.flags.search)) openShop();
+    if (present().some(p => p.task === 'shop' && !busy(p))) openShop();
     else beginDay(null);
   }
 
@@ -1156,15 +1269,15 @@ const Trap = (() => {
     overlay('tr-shop', true);
   }
   function renderShop() {
-    const money = game.res.money, spent = SHOP.reduce((a, it) => a + cart[it.id] * it.price, 0);
+    const money = game.res.money, spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     $('tr-shop-list').innerHTML = SHOP.map(it =>
-      '<div class="tr-shop-row"><span>' + it.name + ' · ' + it.price + '₽</span><span><button data-m="' + it.id + '">−</button><b>' + cart[it.id] + '</b><button data-p="' + it.id + '"' + (spent + it.price > money ? ' disabled' : '') + '>+</button></span></div>').join('');
+      '<div class="tr-shop-row"><span>' + it.name + ' · ' + priceOf(it.price) + '₽</span><span><button data-m="' + it.id + '">−</button><b>' + cart[it.id] + '</b><button data-p="' + it.id + '"' + (spent + priceOf(it.price) > money ? ' disabled' : '') + '>+</button></span></div>').join('');
     $('tr-shop-total').textContent = 'Итого: ' + spent + '₽ из ' + money + '₽';
     $('tr-shop-list').querySelectorAll('[data-p]').forEach(b => b.onclick = () => { cart[b.dataset.p]++; Sound.play('click'); renderShop(); });
     $('tr-shop-list').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { cart[b.dataset.m] = Math.max(0, cart[b.dataset.m] - 1); Sound.play('click'); renderShop(); });
   }
   function buy() {
-    const spent = SHOP.reduce((a, it) => a + cart[it.id] * it.price, 0);
+    const spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     game.res.money -= spent;
     overlay('tr-shop', false);
     beginDay(Object.assign({}, cart));
@@ -1237,8 +1350,9 @@ const Trap = (() => {
       html: () => '<p>Днём стучат в дверь. Можно впустить или ответить «нас нет дома». Полина держится рядом с Ромой, Вика — с Дамиром.</p><table>' +
         row(face('anya') + 'АНЯ', up('500₽ — заказ на съёмку') + ' ' + dn('1 еда')) +
         row(face('sasha') + face('sonya') + 'САША И СОНЯ', up('2 еды — чипсы') + ' ' + up('настроение всем')) +
-        row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета')) +
+        row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета') + '<br><small>иногда наоборот приносит еду и сигареты</small>') +
         row(face('vika') + 'ВИКА', up('2 еды') + ' ' + up('сытость всем') + ' ' + up('настроение Дамиру', 1)) +
+        row(face('savely') + 'САВЕЛИЙ', 'то привезёт ' + up('2 энергетика') + ', то выпьет ' + dn('1 энергетик') + '<br><small>сигарету иногда стреляет, иногда курит свои</small>') +
         row(face('gf') + 'ДЕВУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
         row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') +
         row('📺 ВЕЧЕР У ТЕЛЕКА', 'иногда все собираются на диване у Серёжи: ' + up('настроение всем')) + '</table>',
@@ -1250,6 +1364,16 @@ const Trap = (() => {
         row('ОТРАВЛЕНИЕ · 2 ДН.', dn('здоровье каждый день', 1) + ' ' + dn('половина денег за монтаж')) +
         row('ГРИПП · 4 ДН.', dn('здоровье каждый день') + ' ' + dn('не может работать', 1) + '<br><small>заразный — легко передаётся тем, кто дома</small>') + '</table>' +
         '<p><b>Как лечить:</b> 💊 лекарства (в магазине) сокращают болезнь на 2 дня. Задание <b>«Отдых»</b> больному — выздоровление на день быстрее.</p>',
+    },
+    {
+      title: 'ЧЕМ ДАЛЬШЕ — ТЕМ ТРУДНЕЕ',
+      html: () => '<table>' +
+        row('💸 ЦЕНЫ', 'в магазине дорожают на 1% в день (до ×2)') +
+        row('🏠 АРЕНДА', 'каждые 7 дней хозяин забирает аренду — от 1500₽, с каждой неделей больше. Не хватит денег — заберёт всё и всем ' + dn('настроение')) +
+        row('😩 УСТАЛОСТЬ', 'голод, желание курить и скука со временем растут быстрее') +
+        row('🎬 ЗАКАЗЧИКИ', 'если у жильца плохое настроение, за монтаж платят меньше — и требования растут') +
+        row('⚠ НЕПРИЯТНОСТИ', 'спокойных дней всё меньше: потоп, сломанный компьютер, полиция, задержка оплаты. Чаще болеют') + '</table>' +
+        '<p><b>Потоп</b> не пройдёт сам: вызови мастера или отправь кого-то чинить трубу на весь день.</p>',
     },
     {
       title: 'ХАРАКТЕРЫ',
@@ -1376,6 +1500,7 @@ const Trap = (() => {
       sick: (id, type) => { infect(byId(id), type || 'flu'); },
       nextEvent: k => { forceEvent = k; },
       gather: () => gather(),
+      day: d => { game.day = d; },
       // промотать игровое время на sec секунд (для проверок)
       tick: sec => { for (let i = 0; i < sec * 30 && game.phase === 'day' && !inUI; i++) updateDay(1 / 30); },
     },
