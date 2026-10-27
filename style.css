@@ -385,3 +385,13 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .rt-list li.me { background: var(--yellow); }
 .rt-list li.empty { border: 0; color: #6b5a7a; justify-content: center; line-height: 1.6; text-align: center; }
 .rt-me { font-size: 7px; color: var(--red-d); min-height: 1em; padding-top: 4px; }
+
+/* ---------- Что нового ---------- */
+#ov-news { z-index: 4; }
+.panel.news { max-width: 560px; }
+.news-body { width: 100%; overflow-y: auto; min-height: 0; flex: 1; margin: 6px 0 10px; text-align: left; color: #fff; }
+.news-body h3 { font-size: 9px; color: var(--yellow); text-shadow: 2px 2px 0 var(--ink); margin: 10px 0 6px; font-weight: normal; }
+.news-body h3:first-child { margin-top: 0; }
+.news-body ul { margin: 0; padding-left: 14px; }
+.news-body li { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; font-size: 12px; line-height: 1.4; margin-bottom: 4px; color: #f4ecff; }
+.news-body li b { color: #ffe08a; }
