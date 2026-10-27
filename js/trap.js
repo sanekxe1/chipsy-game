@@ -401,12 +401,66 @@ const Trap = (() => {
 
   let game = null;                 // текущая партия
   let speed = 1, simPaused = false, inUI = false;
+  // ---------------- Сохранение: телефон + облако Telegram ----------------
+  // Облако (CloudStorage, Bot API 6.9+) привязано к аккаунту игрока: можно продолжить на другом устройстве.
+  // Каждая запись помечена временем ts — при загрузке берём более свежую из двух копий.
+  // Конец партии записывается «надгробием» {over: true}, чтобы старая копия не воскресла.
+  const SAVE_KEY = 'trap_save', BEST_KEY = 'trap_best';
+  const cloud = (() => {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    return tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9') ? tg.CloudStorage : null;
+  })();
+  const parse = v => { try { return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  const Store = {
+    put(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) { /* нет доступа */ }
+      if (cloud) try { cloud.setItem(key, value, () => {}); } catch (e) { /* облако недоступно */ }
+    },
+    local(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+    // ответ облака приходит асинхронно; без облака — сразу null
+    cloud(key, cb) {
+      if (!cloud) { cb(null); return; }
+      try { cloud.getItem(key, (err, v) => cb(err ? null : v)); } catch (e) { cb(null); }
+    },
+  };
+  const newest = (a, b) => (!a ? b : !b ? a : (b.ts || 0) > (a.ts || 0) ? b : a);
+
   const Best = {
-    get() { try { return parseInt(localStorage.getItem('trap_best'), 10) || 0; } catch (e) { return 0; } },
-    set(v) { try { localStorage.setItem('trap_best', String(v)); } catch (e) { /* нет доступа */ } },
+    get() { return parseInt(Store.local(BEST_KEY), 10) || 0; },
+    set(v) { Store.put(BEST_KEY, String(v)); },
+    // рекорд из облака, если там больше (например, ставили на другом устройстве)
+    sync(cb) {
+      Store.cloud(BEST_KEY, v => {
+        const c = parseInt(v, 10) || 0;
+        if (c > Best.get()) { try { localStorage.setItem(BEST_KEY, String(c)); } catch (e) { /* нет доступа */ } }
+        cb(Best.get());
+      });
+    },
   };
 
-  function newGame() {
+  // снимок партии на утро: только то, что нужно, чтобы продолжить с этого же утра
+  function snapshot() {
+    const g = game;
+    return {
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, poops: g.poops, log: g.log,
+      people: g.people.map(p => ({
+        id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
+        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, room: p.room,
+      })),
+    };
+  }
+  function saveGame() { Store.put(SAVE_KEY, JSON.stringify(snapshot())); }
+  function eraseSave() { Store.put(SAVE_KEY, JSON.stringify({ v: 1, ts: Date.now(), over: true })); }
+  // свежее сохранение (телефон или облако); null — если нет или партия закончена
+  function loadSave(cb) {
+    const loc = parse(Store.local(SAVE_KEY));
+    Store.cloud(SAVE_KEY, v => {
+      const best = newest(loc, parse(v));
+      cb(best && !best.over && best.day ? best : null);
+    });
+  }
+
+  function createGame() {
     game = {
       day: 0, dayT: 0, phase: 'morning',
       res: { food: 6, cigs: 6, money: 1200, beer: 1, energy: 1 },
@@ -418,7 +472,25 @@ const Trap = (() => {
       guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null,
     };
     simPaused = false;
+  }
+
+  function newGame() {
+    createGame();
     morning();
+  }
+
+  // продолжить с утра сохранённого дня
+  function continueGame(d) {
+    createGame();
+    const g = game;
+    g.day = d.day; g.res = d.res; g.gf = !!d.gf; g.poops = d.poops || []; g.log = d.log || [];
+    for (const sp of d.people) {
+      const p = byId(sp.id);
+      if (p) Object.assign(p, sp);
+    }
+    g.phase = 'morning';
+    g.event = g.day > 1 ? rollEvent() : null;
+    openMorning();
   }
 
   const present = () => game.people.filter(p => p.alive && !p.away);
@@ -468,6 +540,8 @@ const Trap = (() => {
       if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.room = POI[p.bed].room; p.path = []; p.hidden = false; }
       p.flags = {};
     }
+    // автосохранение: если закрыть игру днём, она продолжится с этого утра
+    saveGame();
     game.event = game.day > 1 ? rollEvent() : null;
     openMorning();
   }
@@ -691,6 +765,7 @@ const Trap = (() => {
     const days = game.day;
     const best = Best.get();
     if (days > best) Best.set(days);
+    eraseSave();
     showOver(days, Math.max(days, best), days > best);
   }
 
@@ -1042,9 +1117,23 @@ const Trap = (() => {
     if (tutThenPlay) { tutThenPlay = false; newGame(); }
   }
 
+  // стартовый экран: «продолжить», если есть сохранение (ответ облака может прийти чуть позже)
+  let pendingSave = null;
   function showIntro() {
-    $('tr-intro-best').textContent = Best.get();
+    pendingSave = null;
+    renderIntro();
     overlay('tr-intro', true);
+    Best.sync(() => renderIntro());
+    loadSave(d => { pendingSave = d; renderIntro(); });
+  }
+  function renderIntro() {
+    $('tr-intro-best').textContent = Best.get();
+    const has = !!pendingSave;
+    $('tr-continue').style.display = has ? '' : 'none';
+    if (has) $('tr-continue').textContent = 'ПРОДОЛЖИТЬ · ДЕНЬ ' + pendingSave.day;
+    $('tr-new').textContent = has ? 'НОВАЯ ИГРА' : 'ЗАСЕЛИТЬСЯ';
+    $('tr-new').classList.toggle('red', !has);
+    $('tr-intro-warn').style.display = has ? '' : 'none';
   }
 
   // =====================================================================
@@ -1066,6 +1155,11 @@ const Trap = (() => {
     $('tr-new').onclick = () => {
       Sound.init(); overlay('tr-intro', false); overlay('tr-over', false);
       if (tutDone.get()) newGame(); else openTutorial(true);
+    };
+    $('tr-continue').onclick = () => {
+      if (!pendingSave) return;
+      Sound.init(); Sound.play('click'); overlay('tr-intro', false);
+      continueGame(pendingSave);
     };
     $('tr-help').onclick = () => { Sound.play('click'); openTutorial(false); };
     $('tr-intro-help').onclick = () => { Sound.play('click'); openTutorial(false); };
