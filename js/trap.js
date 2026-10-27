@@ -412,6 +412,7 @@ const Trap = (() => {
   const TV_SPOTS = [[63, 42], [63, 49], [63, 56], [77, 44], [77, 54], [86, 40], [86, 60], [95, 46], [95, 56], [86, 50]];
 
   let game = null;                 // текущая партия
+  let forceEvent = null;           // для отладки: какое событие выпадет следующим утром
   let speed = 1, simPaused = false, inUI = false;
   // ---------------- Сохранение: телефон + облако Telegram ----------------
   // Облако (CloudStorage, Bot API 6.9+) привязано к аккаунту игрока: можно продолжить на другом устройстве.
@@ -590,19 +591,21 @@ const Trap = (() => {
         ],
       };
     }
-    if (Math.random() < 0.4) return null;
+    if (!forceEvent && Math.random() < 0.4) return null;
     const pool = [];
     if (Rm.alive && !Rm.away) pool.push('phone');
     if (S.alive && !S.away) pool.push('oversleep');
     if (D.alive && !D.away && g.day > 2) pool.push('trip');
     pool.push('lights', 'pizza');
-    const k = pick(pool);
+    const k = forceEvent || pick(pool);
+    forceEvent = null;
     if (k === 'phone') return {
-      title: 'Рома потерял телефон', text: 'Опять. Где-то в квартире… или нет.',
+      title: 'Рома потерял телефон',
+      text: 'Опять. Где-то в квартире… или нет.<br>Искать весь день — Рома ничего не сделает и не заработает. Купить новый — −800₽. Забить — −20 настроения Роме.',
       choices: [
         { label: 'ИСКАТЬ ВЕСЬ ДЕНЬ', fn: () => { Rm.flags.search = true; } },
         { label: 'КУПИТЬ НОВЫЙ −800₽', ok: () => g.res.money >= 800, fn: () => { g.res.money -= 800; } },
-        { label: 'ЗАБИТЬ', fn: () => { Rm.happy = cl(Rm.happy - 20); } },
+        { label: 'ЗАБИТЬ · −20 НАСТРОЕНИЯ', fn: () => { Rm.happy = cl(Rm.happy - 20); } },
       ],
     };
     if (k === 'oversleep') { S.flags.slept = true; S.happy = cl(S.happy + 5); return { title: 'Серёжа проспал', text: 'Серёжа проспал полдня. Сегодня он сделает вдвое меньше.' }; }
@@ -646,7 +649,7 @@ const Trap = (() => {
     g.flagsToday = g.flags || {};
     g.flags = {};
     g.shopCart = cart;
-    const cooks = present().filter(p => p.task === 'cook');
+    const cooks = present().filter(p => p.task === 'cook' && !p.flags.search);
     const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) : 0;
     for (const p of present()) {
       if (p.plan.food && g.res.food > 0) { g.res.food--; p.hunger = cl(p.hunger - 45 - cookBonus); p.flags.ate = true; }
@@ -793,7 +796,7 @@ const Trap = (() => {
     let earned = 0;
     // кто болел и отдыхал — поправляется на день быстрее
     for (const p of present()) {
-      if (p.ill && p.task === 'rest') { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' отлежался и выздоровел'); } }
+      if (p.ill && p.task === 'rest' && !p.flags.search) { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' отлежался и выздоровел'); } }
     }
     for (const p of present()) {
       if (p.task !== 'work' || p.flags.search) continue;
@@ -1121,7 +1124,8 @@ const Trap = (() => {
         return '<button data-k="' + k + '" class="tr-it' + (p.plan[k] ? ' on' : '') + '"' + (can ? '' : ' disabled') + '>' + ic + '</button>';
       }).join('') + '</div>';
       const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : []);
-      html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '">' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
+      if (p.flags.search) html += '<div class="tr-ill">🔍 ИЩЕТ ТЕЛЕФОН ВЕСЬ ДЕНЬ — других заданий нет</div>';
+      else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '">' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
       c.innerHTML = html;
       c.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { p.plan[b.dataset.k] = !p.plan[b.dataset.k]; Sound.play('click'); renderPlan(); });
       c.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { p.task = b.dataset.t; Sound.play('click'); renderPlan(); });
@@ -1135,7 +1139,8 @@ const Trap = (() => {
   function startDayClicked() {
     Sound.init();
     overlay('tr-morning', false);
-    if (present().some(p => p.task === 'shop')) openShop();
+    // кто ищет телефон, в магазин не пойдёт — если других покупателей нет, экран магазина не нужен
+    if (present().some(p => p.task === 'shop' && !p.flags.search)) openShop();
     else beginDay(null);
   }
 
@@ -1366,6 +1371,7 @@ const Trap = (() => {
       plan: () => ({ ROOMS, DOORS, roomAt }),
       party: () => { game.partyToday = true; },
       sick: (id, type) => { infect(byId(id), type || 'flu'); },
+      nextEvent: k => { forceEvent = k; },
       gather: () => gather(),
       // промотать игровое время на sec секунд (для проверок)
       tick: sec => { for (let i = 0; i < sec * 30 && game.phase === 'day' && !inUI; i++) updateDay(1 / 30); },
