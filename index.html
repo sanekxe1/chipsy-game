@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 <div id="app">
@@ -19,7 +19,10 @@
       <div class="menu-left">
         <h1 class="title"><span>ЧИПСЫ</span><span>МОЯ ЖИЗНЬ</span></h1>
         <p class="subtitle">сборник мини-игр</p>
-        <button class="btn small" id="btn-sound">ЗВУК: ВКЛ</button>
+        <div class="menu-btns">
+          <button class="btn small" id="btn-sound">ЗВУК: ВКЛ</button>
+          <button class="btn small red" id="btn-rating">🏆 РЕЙТИНГ</button>
+        </div>
       </div>
       <div class="tiles">
         <button class="tile" id="tile-chips">
@@ -38,6 +41,20 @@
           <span class="tile-desc">выживание в студенческой квартире</span>
         </button>
       </div>
+    </div>
+  </section>
+
+  <!-- Общий рейтинг -->
+  <section id="scr-rating" class="screen">
+    <div class="bar">
+      <button class="btn small back" data-back="menu">НАЗАД</button>
+      <h2 class="h2">🏆 РЕЙТИНГ</h2>
+    </div>
+    <div class="rt-tabs" id="rt-tabs"></div>
+    <div class="rt-note" id="rt-note"></div>
+    <div class="rt-cols">
+      <div class="rt-col"><div class="rt-head">ЗА ВСЁ ВРЕМЯ</div><ol class="rt-list" id="rt-all"></ol><div class="rt-me" id="rt-me-all"></div></div>
+      <div class="rt-col week"><div class="rt-head">ЭТА НЕДЕЛЯ <span id="rt-week-dates"></span></div><ol class="rt-list" id="rt-week"></ol><div class="rt-me" id="rt-me-week"></div></div>
     </div>
   </section>
 
@@ -290,15 +307,16 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=32"></script>
-<script src="js/sprites.js?v=32"></script>
-<script src="js/worlds.js?v=32"></script>
-<script src="js/levels.js?v=32"></script>
-<script src="js/game.js?v=32"></script>
-<script src="js/toly-sprites.js?v=32"></script>
-<script src="js/toly.js?v=32"></script>
-<script src="js/trap-sprites.js?v=32"></script>
-<script src="js/trap.js?v=32"></script>
-<script src="js/main.js?v=32"></script>
+<script src="js/audio.js?v=33"></script>
+<script src="js/sprites.js?v=33"></script>
+<script src="js/worlds.js?v=33"></script>
+<script src="js/levels.js?v=33"></script>
+<script src="js/game.js?v=33"></script>
+<script src="js/toly-sprites.js?v=33"></script>
+<script src="js/toly.js?v=33"></script>
+<script src="js/trap-sprites.js?v=33"></script>
+<script src="js/trap.js?v=33"></script>
+<script src="js/rating.js?v=33"></script>
+<script src="js/main.js?v=33"></script>
 </body>
 </html>

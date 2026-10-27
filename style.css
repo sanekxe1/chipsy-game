@@ -363,3 +363,25 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tr-morning-head { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
 .tr-morning-head .h2 { margin: 0; }
 #scr-trap #tr-tut { z-index: 3; }
+
+/* ---------- Общий рейтинг ---------- */
+.menu-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+#scr-rating { justify-content: flex-start; }
+.rt-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-bottom: 6px; }
+.rt-tab { font: inherit; font-size: clamp(7px, 2.2vh, 9px); padding: 7px 10px; background: #e6d3a3; color: var(--ink); border: 2px solid var(--ink); cursor: pointer; }
+.rt-tab.on { background: var(--yellow); box-shadow: 0 3px 0 var(--ink); }
+.rt-note { font-size: clamp(7px, 2vh, 8px); color: #fff; text-shadow: 1px 1px 0 var(--ink); text-align: center; min-height: 1em; margin-bottom: 6px; line-height: 1.5; }
+.rt-cols { flex: 1; min-height: 0; width: 100%; max-width: 820px; display: flex; gap: 10px; }
+.rt-col { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #fff8e1; border: 3px solid var(--ink); box-shadow: inset -3px -3px 0 #e6d3a3, 0 4px 0 var(--ink); padding: 6px 8px; }
+.rt-col.week { background: #ffe9a8; }
+.rt-head { font-size: clamp(8px, 2.4vh, 10px); color: var(--ink); margin-bottom: 6px; }
+.rt-head span { font-size: 7px; color: #6b5a7a; }
+.rt-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+.rt-list li { display: flex; align-items: center; gap: 6px; font-size: clamp(7px, 2.2vh, 9px); color: var(--ink); padding: 4px 2px; border-bottom: 1px dashed #d8c69a; }
+.rt-list li b { width: 22px; text-align: right; color: #8f8577; }
+.rt-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; font-size: clamp(11px, 3.2vh, 13px); }
+.rt-list li i { font-style: normal; white-space: nowrap; }
+.rt-list li.p1 b { color: #d4a017; } .rt-list li.p2 b { color: #8a96a8; } .rt-list li.p3 b { color: #b87333; }
+.rt-list li.me { background: var(--yellow); }
+.rt-list li.empty { border: 0; color: #6b5a7a; justify-content: center; line-height: 1.6; text-align: center; }
+.rt-me { font-size: 7px; color: var(--red-d); min-height: 1em; padding-top: 4px; }

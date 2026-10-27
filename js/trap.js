@@ -607,6 +607,8 @@ const Trap = (() => {
     illnessMorning();
     // автосохранение: если закрыть игру днём, она продолжится с этого утра
     saveGame();
+    // в рейтинг идёт и незаконченная партия: дожил до этого утра — уже результат
+    if (typeof Rating !== 'undefined' && game.day > 1) Rating.submit('trap', game.day);
     game.event = game.day > 1 ? rollEvent() : null;
     openMorning();
   }
@@ -1087,6 +1089,7 @@ const Trap = (() => {
     Sound.stopMusic();
     Sound.play('over');
     const days = game.day;
+    if (typeof Rating !== 'undefined') Rating.submit('trap', days);
     const best = Best.get();
     if (days > best) Best.set(days);
     eraseSave();

@@ -70,6 +70,7 @@
     if (name === 'mode') renderMode();
     if (name === 'levels') renderLevels();
     if (name === 'toly') renderToly();
+    if (name === 'rating') renderRating();
     if (name === 'trap') Trap.start(); else if (Trap.running) Trap.stop();
     if (tgVer('6.1')) safe(() => (name === 'menu' ? tg.BackButton.hide() : tg.BackButton.show()));
   }
@@ -84,7 +85,7 @@
     else if (current === 'game') {
       if (overlayOpen()) exitGame();
       else doPause();
-    } else if (current === 'toly' || current === 'trap') show('menu');
+    } else if (current === 'toly' || current === 'trap' || current === 'rating') show('menu');
     else if (current === 'toly-game') {
       if (overlayOpen()) tolyExit();
       else tolyPause();
@@ -238,6 +239,7 @@
   Trap.init($('#cv3'), $('#stage3'));
   $('#tile-trap').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('trap'); });
   Toly.onGameOver = r => {
+    Rating.submit('toly', r.score);
     $('#t-score').textContent = r.score;
     $('#t-best').textContent = r.best;
     $('#t-coins').textContent = r.coins;
@@ -307,6 +309,7 @@
     $('#controls').classList.toggle('swapped', on);
   };
   Game.onGameOver = r => {
+    Rating.submit('chips', r.score);
     $('#o-score').textContent = r.score;
     $('#o-best').textContent = r.best;
     $('#o-items').textContent = r.collected;
@@ -344,6 +347,62 @@
   const toggleSound = () => { Sound.init(); Sound.toggle(); Sound.play('click'); updateSoundLabels(); };
 
   $('#btn-sound').addEventListener('click', toggleSound);
+  $('#btn-rating').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('rating'); });
+
+  // ---------- Общий рейтинг ----------
+  const RT_GAMES = [
+    { id: 'chips', name: 'ХОЧУ ЧИПСОВ', unit: 'очк.' },
+    { id: 'toly', name: 'ТОЛЬЯТТИНСКАЯ СУЕТА', unit: 'очк.' },
+    { id: 'trap', name: 'ТРЭП ХАТА', unit: 'дн.' },
+  ];
+  let rtGame = 'chips', rtReq = 0;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // даты текущей недели по Москве: «27.10–2.11»
+  function weekDates() {
+    const d = new Date(Date.now() + 3 * 3600e3), day = (d.getUTCDay() + 6) % 7;
+    const mon = new Date(d.getTime() - day * 864e5), sun = new Date(mon.getTime() + 6 * 864e5);
+    const f = x => x.getUTCDate() + '.' + String(x.getUTCMonth() + 1).padStart(2, '0');
+    return f(mon) + '–' + f(sun);
+  }
+  function rtList(el, meEl, v, unit, empty) {
+    el.innerHTML = v.top.length
+      ? v.top.map(r => '<li class="' + (r.me ? 'me' : '') + (r.place <= 3 ? ' p' + r.place : '') + '"><b>' + r.place + '</b><span>' + esc(r.name) + '</span><i>' + r.score + ' ' + unit + '</i></li>').join('')
+      : '<li class="empty">' + empty + '</li>';
+    meEl.textContent = v.me && v.me.place > v.top.length ? 'Ты — ' + v.me.place + ' место (' + v.me.score + ' ' + unit + ')' : '';
+  }
+  function renderRating() {
+    const tabs = $('#rt-tabs');
+    tabs.innerHTML = '';
+    for (const g of RT_GAMES) {
+      const b = document.createElement('button');
+      b.className = 'rt-tab' + (g.id === rtGame ? ' on' : '');
+      b.textContent = g.name;
+      b.addEventListener('click', () => { Sound.play('click'); rtGame = g.id; renderRating(); });
+      tabs.appendChild(b);
+    }
+    $('#rt-week-dates').textContent = weekDates();
+    const note = $('#rt-note'), all = $('#rt-all'), week = $('#rt-week');
+    $('#rt-me-all').textContent = $('#rt-me-week').textContent = '';
+    if (!Rating.enabled()) {
+      note.textContent = 'Рейтинг скоро заработает — сервер ещё подключается.';
+      all.innerHTML = week.innerHTML = '';
+      return;
+    }
+    note.textContent = Rating.canSubmit() ? '' : 'Чтобы попасть в рейтинг, играй через Telegram.';
+    all.innerHTML = week.innerHTML = '<li class="empty">Загрузка…</li>';
+    const req = ++rtReq, g = RT_GAMES.find(x => x.id === rtGame);
+    Rating.load(rtGame).then(d => {
+      if (req !== rtReq || current !== 'rating') return;
+      rtList(all, $('#rt-me-all'), d.all, g.unit, 'Пока пусто — стань первым!');
+      rtList(week, $('#rt-me-week'), d.weekly, g.unit, 'На этой неделе ещё никто не играл');
+    }).catch(() => {
+      if (req !== rtReq) return;
+      all.innerHTML = week.innerHTML = '<li class="empty">Не удалось загрузить. Проверь интернет.</li>';
+    });
+  }
+  // рекорды, поставленные до рейтинга, — один раз в таблицу «за всё время»
+  const localBest = k => { try { return parseInt(localStorage.getItem(k), 10) || 0; } catch (e) { return 0; } };
+  Rating.sendLegacy({ chips: Records.get(), toly: localBest('toly_best'), trap: localBest('trap_best') });
   $('#p-sound').addEventListener('click', toggleSound);
   $('#t-sound').addEventListener('click', toggleSound);
   $('#tile-chips').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('mode'); });
