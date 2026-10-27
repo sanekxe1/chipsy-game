@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 <div id="app">
@@ -112,6 +112,7 @@
     <div id="stage3" class="stage"><canvas id="cv3"></canvas></div>
     <button class="btn small trap-back" data-back="menu">НАЗАД</button>
     <div class="trap-ctl">
+      <button class="btn small" id="tr-help">?</button>
       <button class="btn small" id="tr-speed">×1</button>
       <button class="btn small" id="tr-pause">II</button>
     </div>
@@ -121,7 +122,23 @@
         <h2 class="h2">ТРЭП ХАТА</h2>
         <p class="hint">Серёжа, Дамир и Рома живут в одной квартире. Каждое утро раздавай еду, сигареты и задания, днём реагируй на события. Продержитесь как можно больше дней!</p>
         <p class="hint">Рекорд: <b id="tr-intro-best">0</b> дн.</p>
-        <button class="btn red" id="tr-new">ЗАСЕЛИТЬСЯ</button>
+        <div class="btn-row">
+          <button class="btn red" id="tr-new">ЗАСЕЛИТЬСЯ</button>
+          <button class="btn" id="tr-intro-help">ОБУЧЕНИЕ</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="tr-tut">
+      <div class="panel xwide tut">
+        <h2 class="h2" id="tr-tut-title">КАК ИГРАТЬ</h2>
+        <div class="tut-body" id="tr-tut-body"></div>
+        <div class="tut-dots" id="tr-tut-dots"></div>
+        <div class="btn-row">
+          <button class="btn small" id="tr-tut-prev">НАЗАД</button>
+          <button class="btn small red" id="tr-tut-next">ДАЛЕЕ</button>
+          <button class="btn small" id="tr-tut-skip">ПРОПУСТИТЬ</button>
+        </div>
       </div>
     </div>
 
@@ -275,15 +292,15 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=17"></script>
-<script src="js/sprites.js?v=17"></script>
-<script src="js/worlds.js?v=17"></script>
-<script src="js/levels.js?v=17"></script>
-<script src="js/game.js?v=17"></script>
-<script src="js/toly-sprites.js?v=17"></script>
-<script src="js/toly.js?v=17"></script>
-<script src="js/trap-sprites.js?v=17"></script>
-<script src="js/trap.js?v=17"></script>
-<script src="js/main.js?v=17"></script>
+<script src="js/audio.js?v=19"></script>
+<script src="js/sprites.js?v=19"></script>
+<script src="js/worlds.js?v=19"></script>
+<script src="js/levels.js?v=19"></script>
+<script src="js/game.js?v=19"></script>
+<script src="js/toly-sprites.js?v=19"></script>
+<script src="js/toly.js?v=19"></script>
+<script src="js/trap-sprites.js?v=19"></script>
+<script src="js/trap.js?v=19"></script>
+<script src="js/main.js?v=19"></script>
 </body>
 </html>

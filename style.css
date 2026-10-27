@@ -325,3 +325,24 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tr-name { display: flex; align-items: center; }
 .tr-knock-face { display: flex; gap: 10px; margin-bottom: 8px; }
 .tr-knock-face img { width: 44px; height: 64px; image-rendering: pixelated; }
+
+/* обучение «Трэп хаты» */
+.panel.tut { max-width: 640px; max-height: 94%; overflow: hidden; }
+.panel.tut .h2 { margin-bottom: 6px; }
+.panel.tut .btn-row { flex-shrink: 0; }
+.tut-body { width: 100%; color: #fff; font-size: 8px; line-height: 1.7; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.tut-body p { margin: 0 0 8px; }
+.tut-body b { color: var(--yellow); font-weight: normal; }
+.tut-body small { color: #c9b8dc; font-size: 6px; }
+.tut-body table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.tut-body td { padding: 3px 4px; border-bottom: 2px dashed #6b4a7d; vertical-align: middle; }
+.tut-body td:first-child { width: 38%; color: #fff; font-family: 'Press Start 2P', -apple-system, system-ui, sans-serif; }
+.tut-body i { font-style: normal; display: inline-block; padding: 2px 4px; margin: 1px 0; border: 2px solid var(--ink); }
+.tut-body i.up { background: #3f9e4a; }
+.tut-body i.dn { background: var(--red); }
+.tut-body .c1 { color: #ff9a3c; } .tut-body .c2 { color: #ff6a5a; } .tut-body .c3 { color: var(--yellow); } .tut-body .c4 { color: #9fd0f0; }
+.tut-faces { display: flex; justify-content: center; gap: 10px; margin-bottom: 8px; }
+.tut-faces .tr-face { width: 30px; height: 44px; margin: 0; }
+.tut-dots { display: flex; gap: 6px; margin: 4px 0 8px; }
+.tut-dots i { width: 8px; height: 8px; background: #6b4a7d; border: 2px solid var(--ink); }
+.tut-dots i.on { background: var(--yellow); }

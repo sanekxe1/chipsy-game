@@ -952,6 +952,96 @@ const Trap = (() => {
     overlay('tr-over', true);
   }
 
+  // ---------------- Обучение ----------------
+  // эффекты в таблицах — по коду выше (beginDay, updateDay, letIn): при изменении баланса править и здесь
+  // «++» — сильный эффект, «+» — обычный
+  const up = (n, big) => '<i class="up">' + (big ? '++ ' : '+ ') + n + '</i>';
+  const dn = (n, big) => '<i class="dn">' + (big ? '−− ' : '− ') + n + '</i>';
+  const row = (what, eff) => '<tr><td>' + what + '</td><td>' + eff + '</td></tr>';
+  const face = id => '<img class="tr-face" src="' + portrait(id) + '" alt="">';
+  const TUTORIAL = [
+    {
+      title: 'КАК ИГРАТЬ',
+      html: () => '<div class="tut-faces">' + face('serezha') + face('damir') + face('roma') + '</div>' +
+        '<p>Серёжа, Дамир и Рома живут в одной хате. Твоя задача — чтобы они прожили <b>как можно больше дней</b>.</p>' +
+        '<p><b>Утром</b> раздаёшь запасы и задания. <b>Днём</b> ребята живут сами, а ты отвечаешь на события. <b>Ночью</b> все спят.</p>' +
+        '<p>Если здоровье жильца падает до нуля — он умирает. Умерли все трое — конец игры. Рекорд — число прожитых дней.</p>',
+    },
+    {
+      title: 'ПОКАЗАТЕЛИ',
+      html: () => '<p>У каждого жильца четыре полоски. <b>Полная — хорошо</b>, мигает — пора спасать.</p><table>' +
+        row('<b class="c1">СЫТОСТЬ</b>', 'падает каждый день. На нуле быстро отнимает здоровье') +
+        row('<b class="c2">ЗДОРОВЬЕ</b>', 'на нуле жилец умирает. Восстанавливается ночью во сне, если жилец не голоден') +
+        row('<b class="c3">НАСТРОЕНИЕ</b>', 'понемногу падает. На нуле жилец не работает и начинает болеть') +
+        row('<b class="c4">КУРЕВО</b>', 'падает, когда хочется курить. На нуле портит настроение и чуть-чуть здоровье') + '</table>',
+    },
+    {
+      title: 'ЗАПАСЫ — РАЗДАЁШЬ УТРОМ',
+      html: () => '<table>' +
+        row('🍗 ЕДА', up('сытость', 1)) +
+        row('🚬 СИГАРЕТЫ', up('курево', 1)) +
+        row('🍺 ПИВО', up('настроение', 1) + ' ' + dn('здоровье')) +
+        row('⚡ ЭНЕРГЕТИК', up('деньги за монтаж ×2') + ' ' + dn('здоровье') + ' ' + dn('сытость')) + '</table>' +
+        '<p>Запасы <b>общие</b>. Не хватает на всех — выбирай, кому нужнее. Пополнять — заданием «Магазин».</p>',
+    },
+    {
+      title: 'ЗАДАНИЯ НА ДЕНЬ',
+      html: () => '<table>' +
+        row('МОНТАЖ', up('деньги вечером') + ' ' + dn('настроение') + '<br><small>Дамир и Рома — 450₽, Серёжа — от 150₽ и растёт с каждым днём</small>') +
+        row('МАГАЗИН', 'покупаешь еду, сигареты, пиво, энергетики. Жилец уходит на полдня и не работает') +
+        row('ГОТОВИТЬ', up('сытость от еды всем') + ' ' + up('настроение всем') + '<br><small>у Ромы еда получается сытнее</small>') +
+        row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
+        row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
+    },
+    {
+      title: 'ГОСТИ И КОТ',
+      html: () => '<p>Днём стучат в дверь. Можно впустить или ответить «нас нет дома».</p><table>' +
+        row(face('anya') + 'АНЯ', up('500₽ — заказ на съёмку') + ' ' + dn('1 еда')) +
+        row(face('sasha') + face('sonya') + 'САША И СОНЯ', up('2 еды — чипсы') + ' ' + up('настроение всем')) +
+        row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета')) +
+        row(face('vika') + 'ВИКА', up('2 еды') + ' ' + up('сытость всем') + ' ' + up('настроение Дамиру', 1)) +
+        row(face('gf') + 'ДЕВУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
+        row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') + '</table>',
+    },
+    {
+      title: 'ХАРАКТЕРЫ',
+      html: () => '<table>' +
+        row(face('serezha') + 'СЕРЁЖА', 'курить хочет сильнее всех, но сам выручает себя вейпом. Иногда залипает в доту или просыпает') +
+        row(face('damir') + 'ДАМИР', 'курит реже всех. Иногда уезжает к родителям и возвращается с едой') +
+        row(face('roma') + 'РОМА', 'готовит лучше всех, но теряет телефон и опаздывает на съёмки') + '</table>' +
+        '<p>Смерть друга сильно бьёт по настроению остальных.</p>' +
+        '<p>Кнопки вверху: <b>×1 ×2 ×3</b> — скорость, <b>II</b> — пауза, <b>?</b> — это обучение.</p>',
+    },
+  ];
+  let tutPage = 0, tutThenPlay = false;
+  const tutDone = {
+    get() { try { return localStorage.getItem('trap_tut_done') === '1'; } catch (e) { return true; } },
+    set() { try { localStorage.setItem('trap_tut_done', '1'); } catch (e) { /* нет доступа */ } },
+  };
+
+  function openTutorial(thenPlay) {
+    tutPage = 0;
+    tutThenPlay = !!thenPlay;
+    renderTut();
+    overlay('tr-tut', true);
+  }
+
+  function renderTut() {
+    const pg = TUTORIAL[tutPage], last = tutPage === TUTORIAL.length - 1;
+    $('tr-tut-title').textContent = pg.title;
+    $('tr-tut-body').innerHTML = pg.html();
+    $('tr-tut-dots').innerHTML = TUTORIAL.map((_, i) => '<i class="' + (i === tutPage ? 'on' : '') + '"></i>').join('');
+    $('tr-tut-prev').style.visibility = tutPage ? 'visible' : 'hidden';
+    $('tr-tut-next').textContent = last ? (tutThenPlay ? 'ИГРАТЬ!' : 'ПОНЯТНО') : 'ДАЛЕЕ';
+    $('tr-tut-skip').style.display = last ? 'none' : '';
+  }
+
+  function closeTutorial() {
+    tutDone.set();
+    overlay('tr-tut', false);
+    if (tutThenPlay) { tutThenPlay = false; newGame(); }
+  }
+
   function showIntro() {
     $('tr-intro-best').textContent = Best.get();
     overlay('tr-intro', true);
@@ -972,7 +1062,16 @@ const Trap = (() => {
   function stop() { running = false; cancelAnimationFrame(raf); Sound.stopMusic(); simPaused = false; }
 
   function bindUI() {
-    $('tr-new').onclick = () => { Sound.init(); overlay('tr-intro', false); overlay('tr-over', false); newGame(); };
+    // при первом заселении сначала показываем обучение (его можно пропустить)
+    $('tr-new').onclick = () => {
+      Sound.init(); overlay('tr-intro', false); overlay('tr-over', false);
+      if (tutDone.get()) newGame(); else openTutorial(true);
+    };
+    $('tr-help').onclick = () => { Sound.play('click'); openTutorial(false); };
+    $('tr-intro-help').onclick = () => { Sound.play('click'); openTutorial(false); };
+    $('tr-tut-next').onclick = () => { Sound.play('click'); if (tutPage < TUTORIAL.length - 1) { tutPage++; renderTut(); } else closeTutorial(); };
+    $('tr-tut-prev').onclick = () => { Sound.play('click'); if (tutPage) { tutPage--; renderTut(); } };
+    $('tr-tut-skip').onclick = () => { Sound.play('click'); closeTutorial(); };
     $('tr-again').onclick = () => { overlay('tr-over', false); newGame(); };
     $('tr-go').onclick = startDayClicked;
     $('tr-buy').onclick = buy;
