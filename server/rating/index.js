@@ -7,8 +7,14 @@ const crypto = require('crypto');
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const core = require('./core');
 
-const s3 = new S3Client({ region: 'ru-central1', endpoint: 'https://storage.yandexcloud.net' });
-const BUCKET = process.env.BUCKET;
+// значения переменных чистим от пробелов, переносов строк и кавычек — их легко захватить при копировании
+const env = k => String(process.env[k] || '').trim().replace(/^["'«]+|["'»]+$/g, '').trim();
+const KEY_ID = env('AWS_ACCESS_KEY_ID'), SECRET = env('AWS_SECRET_ACCESS_KEY');
+const s3 = new S3Client({
+  region: 'ru-central1', endpoint: 'https://storage.yandexcloud.net',
+  credentials: { accessKeyId: KEY_ID, secretAccessKey: SECRET },
+});
+const BUCKET = env('BUCKET');
 
 const store = {
   async load(game) {
@@ -45,10 +51,18 @@ module.exports.handler = async event => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'json' }) };
   }
   try {
-    const r = await core.handle(body, { store, botToken: process.env.BOT_TOKEN, hmac });
+    const r = await core.handle(body, { store, botToken: env('BOT_TOKEN'), hmac });
     return { statusCode: r.status, headers: Object.assign({ 'Content-Type': 'application/json' }, CORS), body: JSON.stringify(r.data) };
   } catch (e) {
     console.error(e);
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'server' }) };
+    // логи в консоли Yandex Cloud бывают недоступны — причину отдаём в ответе (без значений переменных)
+    // заданы ли переменные и нет ли в них лишних символов (сами значения не показываем)
+    const vars = {};
+    for (const k of ['BOT_TOKEN', 'BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']) {
+      const v = env(k);
+      vars[k] = !v ? 'нет' : /^[\x21-\x7e]+$/.test(v) ? 'ок' : 'есть лишние символы (кириллица или невидимые)';
+    }
+    const detail = { name: e.name, code: e.Code || e.code, http: e.$metadata && e.$metadata.httpStatusCode, message: String(e.message || '').slice(0, 200) };
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'server', detail, vars }) };
   }
 };

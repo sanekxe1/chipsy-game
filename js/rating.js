@@ -5,7 +5,7 @@
 
 const Rating = (() => {
   // url — адрес облачной функции из Yandex Cloud; initData — только для проверок в обычном браузере
-  const cfg = { url: '', initData: '' };
+  const cfg = { url: 'https://functions.yandexcloud.net/d4eh10fcg65c8dmphif7', initData: '' };
   const tg = window.Telegram && window.Telegram.WebApp;
   const initData = () => cfg.initData || (tg && tg.initData) || '';
 
