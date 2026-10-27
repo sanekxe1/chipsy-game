@@ -5,7 +5,7 @@ window.TrapBot = (() => {
   const BASE = { food: 150, cigs: 220, beer: 120, energy: 110, meds: 230 };
   // привычки игрока; good — внимательный, avg — обычный. TrapBot.P можно менять из консоли
   const P = {
-    good: { eat: 50, smoke: 55, beer: 45, rest: 45, lowF: 2, lowC: 2, tf: 3, tc: 3, energy: 6, meds: true, rentSave: true, rap: true, polina: true, poop: 3, phoneBuy: 2500, laptop: 1800, fine: 1500, partyHp: 65, shopper: 'serezha' },
+    good: { cook: true, eat: 50, smoke: 55, beer: 45, rest: 45, lowF: 2, lowC: 2, tf: 3, tc: 3, energy: 6, meds: true, rentSave: true, rap: true, polina: true, poop: 3, phoneBuy: 2500, laptop: 1800, fine: 1500, partyHp: 65, shopper: 'serezha' },
     // новичок: раздаёт всем всё подряд, энергетики не покупает, кучки убирает редко
     casual: { eat: 25, smoke: 30, beer: 50, rest: 25, lowF: 1, lowC: 1, tf: 2, tc: 2, energy: 0, meds: false, rentSave: false, rap: false, polina: false, poop: 40, phoneBuy: 1500, laptop: 1500, fine: 1000, partyHp: 0, shopper: 'serezha' },
     avg: { eat: 40, smoke: 50, beer: 35, rest: 25, lowF: 1, lowC: 1, tf: 2, tc: 2, energy: 0, meds: false, rentSave: false, rap: false, polina: false, poop: 25, phoneBuy: 1e9, laptop: 2500, fine: 3000, partyHp: 40, shopper: 'serezha' },
@@ -55,6 +55,11 @@ window.TrapBot = (() => {
       cand.sort((a, b) => (a.task === 'rest' ? -2 : 0) - (b.task === 'rest' ? -2 : 0) + (a.id === o.shopper ? -1 : 0) - (b.id === o.shopper ? -1 : 0));
       shopper = cand[0];
       if (shopper) shopper.task = 'shop';
+    }
+    // мало еды — кто-то готовит ужин (лучше Рома), если он не нужен в магазине
+    if (o.cook && g.res.food < n) {
+      const c = ps.filter(p => p.task === 'work' && !p.flags.gig && !p.flags.search && !p.flags.repair).sort((a, b) => (a.id === 'roma' ? -1 : 0) - (b.id === 'roma' ? -1 : 0))[0];
+      if (c) c.task = 'cook';
     }
     // раздача: кому нужнее
     const give = (k, want) => {

@@ -810,6 +810,10 @@ const Trap = (() => {
     // иногда вечером все собираются у Серёжи смотреть телевизор
     g.gatherAt = Math.random() < 0.35 ? rnd(0.6, 0.7) : null;
     g.partyAt = null;
+    // кто готовит — к середине дня общий ужин (запасы еды не тратит)
+    g.dinnerAt = cooks.length ? 0.45 : null;
+    g.dinnerBy = cooks.map(p => p.name);
+    g.dinnerFull = cooks.some(p => p.id === 'roma') ? 35 : 25;
     if (g.partyToday) { g.partyToday = false; g.partyAt = 0.22; g.gatherAt = 0.3; g.knockAt = null; }
     g.shopperBack = false;
     Sound.startMusic('trap');
@@ -846,6 +850,7 @@ const Trap = (() => {
     if (g.catAt && prev < g.catAt && ph >= g.catAt) catComes();
     if (g.partyAt && prev < g.partyAt && ph >= g.partyAt) startParty();
     if (g.gatherAt && prev < g.gatherAt && ph >= g.gatherAt) gather();
+    if (g.dinnerAt && prev < g.dinnerAt && ph >= g.dinnerAt) dinner();
 
     for (const p of present()) {
       // расписание
@@ -1031,6 +1036,14 @@ const Trap = (() => {
     if (id === 'vika') { const d = byId('damir'); d.happy = cl(d.happy + 30); g.res.food += 2; all.forEach(p => { p.hunger = cl(p.hunger - 15); }); log('Вика приготовила ужин на всех: +2 еды, все сыты'); }
     if (id === 'gf') { const s = byId('serezha'); s.happy = cl(s.happy + 30); if (g.res.food > 0) g.res.food--; log('Альтушка Серёжи зашла в гости: Серёже хорошо'); }
     Sound.play('checkpoint');
+  }
+
+  // ужин от повара: всем, кто дома, −25 голода (у Ромы сытнее — −35)
+  function dinner() {
+    const g = game, eaters = present().filter(p => !p.hidden);
+    for (const p of eaters) { p.hunger = cl(p.hunger - g.dinnerFull); say(p, 'УЖИН!'); }
+    if (eaters.length) log('🍲 ' + g.dinnerBy.join(' и ') + ' ' + (g.dinnerBy.length > 1 ? 'приготовили' : 'приготовил') + ' ужин: всем −' + g.dinnerFull + ' голода');
+    Sound.play('coin');
   }
 
   // все, кто дома, и гости собираются на диване и ковре у телевизора Серёжи
@@ -1413,7 +1426,7 @@ const Trap = (() => {
       html: () => '<table>' +
         row('МОНТАЖ', up('деньги вечером') + ' ' + dn('настроение') + '<br><small>Дамир и Рома — 450₽, Серёжа — от 150₽ и растёт с каждым днём</small>') +
         row('МАГАЗИН', 'покупаешь еду, сигареты, пиво, энергетики. Жилец уходит на полдня и не работает') +
-        row('ГОТОВИТЬ', up('сытость от еды всем') + ' ' + up('настроение всем') + '<br><small>у Ромы еда получается сытнее</small>') +
+        row('ГОТОВИТЬ', up('ужин всем — сытость', 1) + ' без трат еды ' + up('утренняя порция сытнее') + ' ' + up('настроение всем') + '<br><small>повар в этот день не монтирует; у Ромы ужин сытнее</small>') +
         row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
         row('РЕП', 'только в день концерта «Реп над Волгой» (300₽, а иногда друзья зовут бесплатно): жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
         row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
