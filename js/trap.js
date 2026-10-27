@@ -340,7 +340,7 @@ const Trap = (() => {
     for (const rm of ROOMS) {
       if (!rm.label) continue;
       // во время игры подписи комнат мешают именам жильцов — оставляем только кухню
-      if (game && rm.id !== 'kitchen') continue;
+      if (game) continue;
       const lx = ox + rm.x + rm.w / 2, ly = oy + rm.y + (rm.id === 'kitchen' ? 22 : rm.h - 8);
       if (rm.id.startsWith('balcony')) continue;
       ctx.fillStyle = 'rgba(27,22,38,0.55)';
@@ -383,11 +383,18 @@ const Trap = (() => {
   const TASKS = {
     work: 'МОНТАЖ', shop: 'МАГАЗИН', cook: 'ГОТОВИТЬ', rest: 'ОТДЫХ', sport: 'СПОРТ',
   };
+  // болезни: сколько дней, сколько здоровья в день отнимают, какая доля оплаты за монтаж остаётся, шанс заразить соседа за утро
+  const ILLS = {
+    cold: { name: 'ПРОСТУДА', days: 3, drain: 8, pay: 0.5, spread: 0.12 },
+    poison: { name: 'ОТРАВЛЕНИЕ', days: 2, drain: 15, pay: 0.5, spread: 0 },
+    flu: { name: 'ГРИПП', days: 4, drain: 12, pay: 0, spread: 0.3 },
+  };
   const SHOP = [
     { id: 'food', name: 'ЕДА', price: 150 },
     { id: 'cigs', name: 'СИГАРЕТЫ', price: 220 },
     { id: 'beer', name: 'ПИВО', price: 120 },
     { id: 'energy', name: 'ЭНЕРГЕТИК', price: 110 },
+    { id: 'meds', name: 'ЛЕКАРСТВА', price: 250 },
   ];
   // друзья, которые стучат в дверь
   const FRIENDS = {
@@ -450,7 +457,7 @@ const Trap = (() => {
       v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, partyOffered: !!g.partyOffered, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
-        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y,
+        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill,
       })),
     };
   }
@@ -468,11 +475,11 @@ const Trap = (() => {
   function createGame() {
     game = {
       day: 0, dayT: 0, phase: 'morning',
-      res: { food: 6, cigs: 6, money: 1200, beer: 1, energy: 1 },
+      res: { food: 6, cigs: 6, money: 1200, beer: 1, energy: 1, meds: 1 },
       people: RESIDENTS.map(r => ({
         ...r, hunger: 20, health: 100, happy: 70, crave: 20, alive: true, away: 0, skill: 0,
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
-        plan: { food: true, cigs: true, beer: false, energy: false }, sched: [], hidden: false, flags: {},
+        plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
       guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null,
     };
@@ -488,7 +495,7 @@ const Trap = (() => {
   function continueGame(d) {
     createGame();
     const g = game;
-    g.day = d.day; g.res = d.res; g.gf = !!d.gf; g.partyOffered = !!d.partyOffered; g.poops = d.poops || []; g.log = d.log || [];
+    g.day = d.day; g.res = Object.assign({ meds: 0 }, d.res); g.gf = !!d.gf; g.partyOffered = !!d.partyOffered; g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -559,6 +566,7 @@ const Trap = (() => {
       if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.path = []; p.hidden = false; }
       p.flags = {};
     }
+    illnessMorning();
     // автосохранение: если закрыть игру днём, она продолжится с этого утра
     saveGame();
     game.event = game.day > 1 ? rollEvent() : null;
@@ -604,6 +612,33 @@ const Trap = (() => {
     return { title: 'Сосед угостил', text: 'Сосед снизу занёс две пиццы. +2 еды.' };
   }
 
+  // ---------------- Болезни ----------------
+  // каждое утро: болезнь идёт на убыль, грипп и простуда могут перекинуться на соседей, здоровые могут заболеть
+  function illnessMorning() {
+    const g = game, home = present();
+    if (g.day <= 1) return;
+    const sick = home.filter(p => p.ill);
+    for (const p of sick) {
+      p.ill.days--;
+      if (p.ill.days <= 0) { log(p.name + ' выздоровел'); p.ill = null; }
+    }
+    for (const src of sick.filter(p => p.ill)) {
+      for (const o of home) {
+        if (!o.ill && Math.random() < ILLS[src.ill.type].spread) { infect(o, src.ill.type); log(o.name + ' заразился от ' + (src.id === 'serezha' ? 'Серёжи' : src.id === 'damir' ? 'Дамира' : 'Ромы')); }
+      }
+    }
+    for (const p of home) {
+      if (p.ill) continue;
+      const chance = 0.05 + (p.health < 50 ? 0.06 : 0) + (p.hunger > 80 ? 0.04 : 0);
+      if (Math.random() < chance) {
+        const r = Math.random(), type = r < 0.5 ? 'cold' : r < 0.75 ? 'poison' : 'flu';
+        infect(p, type);
+        log('🤒 ' + p.name + ' заболел: ' + ILLS[type].name.toLowerCase() + ' на ' + ILLS[type].days + ' дн.');
+      }
+    }
+  }
+  function infect(p, type) { p.ill = { type, days: ILLS[type].days }; }
+
   // ---------------- Начало дня ----------------
   function beginDay(cart) {
     const g = game;
@@ -618,6 +653,13 @@ const Trap = (() => {
       if (p.plan.cigs && g.res.cigs > 0) { g.res.cigs--; p.crave = cl(p.crave - 65); p.flags.smoked = true; }
       if (p.plan.beer && g.res.beer > 0) { g.res.beer--; p.happy = cl(p.happy + 20); p.health = cl(p.health - 3); say(p, 'ПИВО!'); }
       if (p.plan.energy && g.res.energy > 0) { g.res.energy--; p.flags.energy = true; p.health = cl(p.health - 3); p.hunger = cl(p.hunger + 8); }
+      // лекарства: болезнь короче на 2 дня и немного здоровья
+      if (p.plan.meds && p.ill && g.res.meds > 0) {
+        g.res.meds--; p.plan.meds = false;
+        p.health = cl(p.health + 10); p.ill.days -= 2;
+        say(p, 'ТАБЛЕТКИ');
+        if (p.ill.days <= 0) { p.ill = null; log(p.name + ' выпил лекарства и сразу выздоровел'); }
+      }
       if (cooks.length) p.happy = cl(p.happy + 6);
       buildSchedule(p);
     }
@@ -695,6 +737,12 @@ const Trap = (() => {
       if (at && p.act === 'монтаж') p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
       if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙП'); }
+      if (p.ill) {
+        p.health = cl(p.health - ILLS[p.ill.type].drain * dd);
+        p.happy = cl(p.happy - 5 * dd);
+        p.coughT = (p.coughT || 0) - dt;
+        if (p.coughT <= 0 && !p.hidden) { p.coughT = rnd(2.5, 5); say(p, p.ill.type === 'poison' ? 'УХ…' : 'КХЕ-КХЕ'); }
+      }
       if (p.health <= 0) die(p);
     }
 
@@ -743,13 +791,19 @@ const Trap = (() => {
   function endDay() {
     const g = game;
     let earned = 0;
+    // кто болел и отдыхал — поправляется на день быстрее
+    for (const p of present()) {
+      if (p.ill && p.task === 'rest') { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' отлежался и выздоровел'); } }
+    }
     for (const p of present()) {
       if (p.task !== 'work' || p.flags.search) continue;
+      if (p.ill && ILLS[p.ill.type].pay === 0) { log(p.name + ' болеет гриппом и не смог работать'); continue; }
       if (g.flagsToday.noPower) continue;
       let pay = p.id === 'serezha' ? 150 + 60 * p.skill : p.pay;
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
+      if (p.ill) { pay = Math.round(pay * ILLS[p.ill.type].pay); log(p.name + ' работал больным — заплатили меньше'); }
       if (p.id === 'roma' && Math.random() < 0.2) { pay = Math.round(pay / 2); log('Рома опоздал на съёмку и потерял флешку — заплатили половину'); }
       if (p.id === 'serezha') {
         if (Math.random() < 0.2) { log('Серёжа залип в доту и ничего не смонтировал'); p.happy = cl(p.happy + 10); continue; }
@@ -928,12 +982,14 @@ const Trap = (() => {
   // карточка жильца: четыре полоски (полная — хорошо)
   function card(x, y, p) {
     const w = 84;
-    ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(x, y, w, 46);
-    ctx.fillStyle = p.color; ctx.fillRect(x, y, 3, 46);
+    const hgt = p.ill && p.alive && !p.away ? 49 : 46;
+    ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(x, y, w, hgt);
+    ctx.fillStyle = p.color; ctx.fillRect(x, y, 3, hgt);
     ctx.drawImage(TRSPR[p.id].stand, x + w - 14, y + 1);
     txt(p.name.toUpperCase(), x + 6, y + 3, 5, '#ffffff');
     if (!p.alive) { txt('УМЕР', x + 6, y + 14, 5, '#e33b2e'); return; }
     if (p.away) { txt('У РОДИТЕЛЕЙ', x + 6, y + 14, 4, '#9fd0f0'); txt(p.away + ' ДН.', x + 6, y + 21, 4, '#9fd0f0'); return; }
+    if (p.ill) txt(ILLS[p.ill.type].name + ' ' + p.ill.days + 'Д', x + 6, y + 41, 4, '#7dff8a');
     const bars = [['СЫТ', 100 - p.hunger, '#ff9a3c'], ['ЗДОР', p.health, '#e33b2e'], ['НАСТР', p.happy, '#ffd23f'], ['КУРЕВО', 100 - p.crave, '#9fd0f0']];
     bars.forEach(([lb, v, col], i) => {
       const by = y + 11 + i * 8;
@@ -962,7 +1018,7 @@ const Trap = (() => {
     ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(rx, ry, 84, 46);
     txt('ЗАПАСЫ', rx + 6, ry + 3, 5, '#ffffff');
     const r = g.res;
-    [['ЕДА', r.food], ['СИГАРЕТЫ', r.cigs], ['ДЕНЬГИ', r.money + '₽'], ['ПИВО / ЭНЕРГ', r.beer + ' / ' + r.energy]].forEach(([lb, v], i) => {
+    [['ЕДА', r.food], ['СИГАРЕТЫ', r.cigs], ['ДЕНЬГИ', r.money + '₽'], ['ПИВО/ЭН/ЛЕК', r.beer + '/' + r.energy + '/' + r.meds]].forEach(([lb, v], i) => {
       txt(lb, rx + 6, ry + 12 + i * 8, 4, '#c9ced6');
       txt(String(v), rx + 80, ry + 12 + i * 8, 4, '#ffd23f', 'right');
     });
@@ -1045,7 +1101,8 @@ const Trap = (() => {
     wrap.classList.toggle('blocked', !!waiting);
     // сколько уже раздали
     const used = k => present().filter(p => p.plan[k]).length;
-    for (const k of ['food', 'cigs', 'beer', 'energy']) {
+    for (const p of present()) if (!p.ill) p.plan.meds = false;
+    for (const k of ['food', 'cigs', 'beer', 'energy', 'meds']) {
       for (const p of present()) if (p.plan[k] && used(k) > g.res[k]) p.plan[k] = false;
     }
     wrap.innerHTML = '';
@@ -1058,8 +1115,9 @@ const Trap = (() => {
       if (p.away) { c.innerHTML = html + '<div class="tr-note">У РОДИТЕЛЕЙ ЕЩЁ ' + p.away + ' ДН.</div>'; wrap.appendChild(c); continue; }
       html += '<div class="tr-bars">' + [['сытость', 100 - p.hunger, '#ff9a3c'], ['здоровье', p.health, '#e33b2e'], ['настроение', p.happy, '#ffd23f'], ['курево', 100 - p.crave, '#9fd0f0']]
         .map(([n, v, col]) => '<div class="tr-bar"><span>' + n + '</span><i><b style="width:' + Math.round(v) + '%;background:' + col + '"></b></i></div>').join('') + '</div>';
-      html += '<div class="tr-items">' + [['food', '🍗'], ['cigs', '🚬'], ['beer', '🍺'], ['energy', '⚡']].map(([k, ic]) => {
-        const can = p.plan[k] || used(k) < g.res[k];
+      if (p.ill) html += '<div class="tr-ill">🤒 ' + ILLS[p.ill.type].name + ' — ещё ' + p.ill.days + ' дн.</div>';
+      html += '<div class="tr-items">' + [['food', '🍗'], ['cigs', '🚬'], ['beer', '🍺'], ['energy', '⚡'], ['meds', '💊']].map(([k, ic]) => {
+        const can = p.plan[k] || (used(k) < g.res[k] && (k !== 'meds' || p.ill));
         return '<button data-k="' + k + '" class="tr-it' + (p.plan[k] ? ' on' : '') + '"' + (can ? '' : ' disabled') + '>' + ic + '</button>';
       }).join('') + '</div>';
       const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : []);
@@ -1070,7 +1128,7 @@ const Trap = (() => {
       wrap.appendChild(c);
     }
     const r = g.res;
-    $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy;
+    $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy + ' · лекарства ' + r.meds;
     $('tr-go').disabled = !!waiting;
   }
 
@@ -1084,7 +1142,7 @@ const Trap = (() => {
   // магазин: выбор покупок для того, кто идёт
   let cart = {};
   function openShop() {
-    cart = { food: 0, cigs: 0, beer: 0, energy: 0 };
+    cart = { food: 0, cigs: 0, beer: 0, energy: 0, meds: 0 };
     renderShop();
     overlay('tr-shop', true);
   }
@@ -1152,7 +1210,8 @@ const Trap = (() => {
         row('🍗 ЕДА', up('сытость', 1)) +
         row('🚬 СИГАРЕТЫ', up('курево', 1)) +
         row('🍺 ПИВО', up('настроение', 1) + ' ' + dn('здоровье')) +
-        row('⚡ ЭНЕРГЕТИК', up('деньги за монтаж ×2') + ' ' + dn('здоровье') + ' ' + dn('сытость')) + '</table>' +
+        row('⚡ ЭНЕРГЕТИК', up('деньги за монтаж ×2') + ' ' + dn('здоровье') + ' ' + dn('сытость')) +
+        row('💊 ЛЕКАРСТВА', 'только больному: болезнь короче на 2 дня, ' + up('здоровье')) + '</table>' +
         '<p>Запасы <b>общие</b>. Не хватает на всех — выбирай, кому нужнее. Пополнять — заданием «Магазин».</p>',
     },
     {
@@ -1175,6 +1234,14 @@ const Trap = (() => {
         row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') +
         row('📺 ВЕЧЕР У ТЕЛЕКА', 'иногда все собираются на диване у Серёжи: ' + up('настроение всем')) +
         row('🎉 ТУСОВКА (15-й день)', 'разовый шанс: приходят все друзья. ' + up('курево на максимум', 1) + ' ' + up('настроение на максимум', 1) + ' ' + dn('30% здоровья', 1) + ' ' + dn('30% бюджета', 1)) + '</table>',
+    },
+    {
+      title: 'БОЛЕЗНИ',
+      html: () => '<p>Иногда жильцы заболевают — чаще, если здоровье уже низкое или они голодны. Больной кашляет, у него в карточке видна болезнь и сколько дней осталось.</p><table>' +
+        row('ПРОСТУДА · 3 ДН.', dn('здоровье каждый день') + ' ' + dn('половина денег за монтаж') + '<br><small>может заразить соседей</small>') +
+        row('ОТРАВЛЕНИЕ · 2 ДН.', dn('здоровье каждый день', 1) + ' ' + dn('половина денег за монтаж')) +
+        row('ГРИПП · 4 ДН.', dn('здоровье каждый день') + ' ' + dn('не может работать', 1) + '<br><small>заразный — легко передаётся тем, кто дома</small>') + '</table>' +
+        '<p><b>Как лечить:</b> 💊 лекарства (в магазине) сокращают болезнь на 2 дня. Задание <b>«Отдых»</b> больному — выздоровление на день быстрее.</p>',
     },
     {
       title: 'ХАРАКТЕРЫ',
@@ -1298,6 +1365,7 @@ const Trap = (() => {
       route: (x, y, tx, ty) => { const o = { x, y, path: [] }; routeTo(o, { x: tx, y: ty }); return o.path; },
       plan: () => ({ ROOMS, DOORS, roomAt }),
       party: () => { game.partyToday = true; },
+      sick: (id, type) => { infect(byId(id), type || 'flu'); },
       gather: () => gather(),
       // промотать игровое время на sec секунд (для проверок)
       tick: sec => { for (let i = 0; i < sec * 30 && game.phase === 'day' && !inUI; i++) updateDay(1 / 30); },

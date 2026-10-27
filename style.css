@@ -346,3 +346,5 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tut-dots { display: flex; gap: 6px; margin: 4px 0 8px; }
 .tut-dots i { width: 8px; height: 8px; background: #6b4a7d; border: 2px solid var(--ink); }
 .tut-dots i.on { background: var(--yellow); }
+
+.tr-ill { font-size: 7px; color: #2f8a2a; background: #e3f6dd; border: 2px solid var(--ink); padding: 3px 4px; }
