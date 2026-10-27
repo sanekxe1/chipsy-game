@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=24">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 <div id="app">
@@ -41,20 +41,11 @@
     </div>
   </section>
 
-  <!-- Выбор героя -->
-  <section id="scr-select" class="screen">
-    <div class="bar">
-      <button class="btn small back" data-back="menu">НАЗАД</button>
-      <h2 class="h2">ВЫБЕРИ ГЕРОЯ</h2>
-    </div>
-    <div class="cards" id="heroes"></div>
-  </section>
-
   <!-- Выбор режима -->
   <section id="scr-mode" class="screen">
     <div class="bar">
-      <button class="btn small back" data-back="select">НАЗАД</button>
-      <h2 class="h2" id="mode-title">САША</h2>
+      <button class="btn small back" data-back="menu">НАЗАД</button>
+      <h2 class="h2" id="mode-title">ХОЧУ ЧИПСОВ</h2>
     </div>
     <div class="mode-row">
       <canvas id="mode-hero" width="30" height="25"></canvas>
@@ -82,6 +73,8 @@
       <button class="btn small back" data-back="mode">НАЗАД</button>
       <h2 class="h2" id="levels-title">УРОВНИ</h2>
     </div>
+    <div class="chapters" id="chapters"></div>
+    <div class="chapter-text" id="chapter-text"></div>
     <div class="cards" id="levels"></div>
   </section>
 
@@ -294,15 +287,15 @@
   </div>
 </div>
 
-<script src="js/audio.js?v=24"></script>
-<script src="js/sprites.js?v=24"></script>
-<script src="js/worlds.js?v=24"></script>
-<script src="js/levels.js?v=24"></script>
-<script src="js/game.js?v=24"></script>
-<script src="js/toly-sprites.js?v=24"></script>
-<script src="js/toly.js?v=24"></script>
-<script src="js/trap-sprites.js?v=24"></script>
-<script src="js/trap.js?v=24"></script>
-<script src="js/main.js?v=24"></script>
+<script src="js/audio.js?v=25"></script>
+<script src="js/sprites.js?v=25"></script>
+<script src="js/worlds.js?v=25"></script>
+<script src="js/levels.js?v=25"></script>
+<script src="js/game.js?v=25"></script>
+<script src="js/toly-sprites.js?v=25"></script>
+<script src="js/toly.js?v=25"></script>
+<script src="js/trap-sprites.js?v=25"></script>
+<script src="js/trap.js?v=25"></script>
+<script src="js/main.js?v=25"></script>
 </body>
 </html>

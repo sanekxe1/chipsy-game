@@ -22,15 +22,9 @@
     if (tgVer('6.1') && tg.HapticFeedback) safe(() => tg.HapticFeedback.impactOccurred(type));
   };
 
-  const ITEM_NAMES = { chip: 'ЧИПСЫ', kibble: 'КОРМ' };
-  const HERO_INFO = {
-    sasha: 'Мир: Волга<br>Бустер: мотоцикл',
-    sonya: 'Мир: Город<br>Бустер: энергетик',
-    chips: 'Мир: Квартира<br>Бустер: пёрышко<br>Прыгает выше всех',
-  };
 
   let current = 'menu';
-  let hero = 'sasha';
+  let chapter = 0;
   let lastLevel = 0;
   let previewTimer = 0;
 
@@ -73,7 +67,6 @@
     $('#scr-' + name).classList.add('active');
     current = name;
     clearInterval(previewTimer);
-    if (name === 'select') renderHeroes();
     if (name === 'mode') renderMode();
     if (name === 'levels') renderLevels();
     if (name === 'toly') renderToly();
@@ -86,8 +79,7 @@
 
   function goBack() {
     Sound.play('click');
-    if (current === 'select') show('menu');
-    else if (current === 'mode') show('select');
+    if (current === 'mode') show('menu');
     else if (current === 'levels') show('mode');
     else if (current === 'game') {
       if (overlayOpen()) exitGame();
@@ -141,38 +133,18 @@
     drawInto($('#rotate-cat'), SPR.chips.run[0], null);
   }
 
-  function animate(list) {
+  // превью героя: трое по очереди, каждый на фоне своего мира
+  function animate(cv) {
     let f = 0;
     const tick = () => {
       f++;
-      for (const [cv, id] of list) {
-        const set = SPR[id];
-        const img = id === 'sasha' && (f % 16) >= 10 ? set.moto[f % 2] : set.run[f % 2];
-        drawInto(cv, img, heroBg(id));
-      }
+      const id = Game.HEROES[Math.floor(f / 14) % 3];
+      const set = SPR[id];
+      const img = id === 'sasha' && (f % 14) >= 9 ? set.moto[f % 2] : set.run[f % 2];
+      drawInto(cv, img, heroBg(id));
     };
     tick();
     previewTimer = setInterval(tick, 160);
-  }
-
-  function renderHeroes() {
-    const box = $('#heroes');
-    box.innerHTML = '';
-    const canvases = [];
-    for (const id of Object.keys(Game.CHARS)) {
-      const c = Game.CHARS[id];
-      const b = document.createElement('button');
-      b.className = 'card';
-      b.innerHTML =
-        '<canvas width="30" height="25"></canvas>' +
-        '<div class="card-name">' + c.name.toUpperCase() + '</div>' +
-        '<div class="card-info">' + HERO_INFO[id] + '</div>' +
-        '<div class="card-best"><i class="st">★</i> ' + Progress.total(id) + ' · рекорд ' + Records.get(id) + '</div>';
-      b.addEventListener('click', () => { Sound.init(); Sound.play('click'); hero = id; show('mode'); });
-      box.appendChild(b);
-      canvases.push([b.querySelector('canvas'), id]);
-    }
-    animate(canvases);
   }
 
   function renderBank() {
@@ -186,20 +158,39 @@
 
   function renderMode() {
     renderBank();
-    drawInto($('#bank-icon'), Game.CHARS[hero].item === 'kibble' ? SPR.kibble : SPR.chip, null);
-    $('#mode-title').textContent = Game.CHARS[hero].name.toUpperCase();
-    $('#m-levels-desc').innerHTML = '<i class="st">★</i> ' + Progress.total(hero) + ' из ' + LEVELS[hero].length * 3;
-    $('#m-endless-desc').textContent = 'рекорд: ' + Records.get(hero);
-    animate([[$('#mode-hero'), hero]]);
+    drawInto($('#bank-icon'), SPR.chip, null);
+    $('#m-levels-desc').innerHTML = '<i class="st">★</i> ' + Progress.total() + ' из ' + CAMPAIGN.length * 3;
+    $('#m-endless-desc').textContent = 'рекорд: ' + Records.get();
+    animate($('#mode-hero'));
   }
 
-  function renderLevels() {
-    $('#levels-title').textContent = 'УРОВНИ · ' + Game.CHARS[hero].name.toUpperCase();
+  // глава по умолчанию — та, где первый непройденный открытый уровень
+  function currentChapter() {
+    const p = Progress.get();
+    let i = CAMPAIGN.findIndex((lv, k) => Progress.unlocked(k) && !p.stars[k]);
+    if (i < 0) i = CAMPAIGN.length - 1;
+    return CAMPAIGN[i].chapter;
+  }
+
+  function renderLevels(ch) {
+    chapter = ch === undefined ? currentChapter() : ch;
+    $('#levels-title').textContent = 'УРОВНИ';
+    const tabs = $('#chapters');
+    tabs.innerHTML = '';
+    CHAPTERS.forEach((c, k) => {
+      const b = document.createElement('button');
+      b.className = 'chap' + (k === chapter ? ' on' : '');
+      b.textContent = c.name;
+      b.addEventListener('click', () => { Sound.play('click'); renderLevels(k); });
+      tabs.appendChild(b);
+    });
+    $('#chapter-text').textContent = CHAPTERS[chapter].text;
     const box = $('#levels');
     box.innerHTML = '';
-    const p = Progress.get(hero);
-    LEVELS[hero].forEach((lv, i) => {
-      const open = Progress.unlocked(hero, i);
+    const p = Progress.get();
+    CAMPAIGN.forEach((lv, i) => {
+      if (lv.chapter !== chapter) return;
+      const open = Progress.unlocked(i);
       const st = p.stars[i] || 0;
       const b = document.createElement('button');
       b.className = 'card lvl' + (open ? '' : ' lock');
@@ -207,7 +198,7 @@
         '<div class="num">' + (open ? i + 1 : '🔒') + '</div>' +
         '<div class="card-name">' + lv.name.toUpperCase() + '</div>' +
         '<div class="lvl-stars"><b>' + '★'.repeat(st) + '</b>' + '★'.repeat(3 - st) + '</div>' +
-        (lv.escape ? '<div class="tag">ПОБЕГ</div>' : '');
+        (lv.final ? '<div class="tag">ФИНАЛ</div>' : lv.escape ? '<div class="tag">ЭСТАФЕТА</div>' : '');
       b.addEventListener('click', () => {
         if (!open) { Sound.play('bump'); return; }
         startLevel(i);
@@ -284,13 +275,13 @@
   function startLevel(i) {
     lastLevel = i;
     enterGame();
-    Game.startLevel(hero, i);
+    Game.startLevel(i);
   }
 
   function startEndless() {
     const headStart = $('#use-start').checked && Bank.useStart();
     enterGame();
-    Game.startEndless(hero, headStart);
+    Game.startEndless(headStart);
   }
 
   function doPause() {
@@ -319,7 +310,7 @@
     $('#o-score').textContent = r.score;
     $('#o-best').textContent = r.best;
     $('#o-items').textContent = r.collected;
-    $('#o-item-label').textContent = ITEM_NAMES[Game.CHARS[r.charId].item];
+    $('#o-item-label').textContent = 'СОБРАНО';
     $('#o-dist').textContent = r.dist + ' м';
     $('#o-new').classList.toggle('show', r.isNew);
     $('#o-bank').textContent = '+' + r.collected + ' в копилку · всего ' + Bank.get().coins;
@@ -332,13 +323,13 @@
     $('#l-stars').innerHTML = '<b>' + '★'.repeat(r.stars) + '</b>' + '★'.repeat(3 - r.stars);
     $('#l-stars').style.display = r.won ? '' : 'none';
     $('#l-time').textContent = fmt(r.time);
-    $('#l-item-label').textContent = ITEM_NAMES[Game.CHARS[r.hero].item];
+    $('#l-item-label').textContent = 'СОБРАНО';
     $('#l-items').textContent = r.collected + '/' + r.total;
     $('#l-hint').textContent = r.won
-      ? 'Звёзды: финиш · 80% ' + ITEM_NAMES[Game.CHARS[r.hero].item].toLowerCase() + ' · ' + (r.escape ? 'без потери жизней' : 'быстрее ' + fmt(r.par))
+      ? 'Звёзды: финиш · 80% добычи · ' + (r.escape ? 'без потери жизней' : 'быстрее ' + fmt(r.par))
       : 'Попробуй ещё раз — у тебя получится!';
     $('#l-bank').textContent = '+' + r.collected + ' в копилку · всего ' + Bank.get().coins;
-    const hasNext = r.won && r.idx + 1 < LEVELS[r.hero].length;
+    const hasNext = r.won && r.idx + 1 < CAMPAIGN.length;
     $('#l-next').style.display = hasNext ? '' : 'none';
     $('#ov-level').classList.add('show');
   };
@@ -355,7 +346,7 @@
   $('#btn-sound').addEventListener('click', toggleSound);
   $('#p-sound').addEventListener('click', toggleSound);
   $('#t-sound').addEventListener('click', toggleSound);
-  $('#tile-chips').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('select'); });
+  $('#tile-chips').addEventListener('click', () => { Sound.init(); Sound.play('click'); show('mode'); });
   $('#m-levels').addEventListener('click', () => { Sound.play('click'); show('levels'); });
   $('#m-endless').addEventListener('click', startEndless);
   $('#buy-start').addEventListener('click', () => {

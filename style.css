@@ -352,3 +352,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tr-event .ev-up, .tr-event .ev-dn { display: inline-block; padding: 2px 4px; margin: 3px 2px 0 0; border: 2px solid var(--ink); }
 .tr-event .ev-up { background: #3f9e4a; }
 .tr-event .ev-dn { background: var(--red); }
+
+/* главы кампании «Хочу чипсов» */
+.chapters { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 4px; }
+.chap { font: inherit; font-size: clamp(6px, 2vh, 8px); padding: 6px 8px; background: #e6d3a3; color: var(--ink); border: 2px solid var(--ink); cursor: pointer; }
+.chap.on { background: var(--yellow); box-shadow: 0 3px 0 var(--ink); }
+.chapter-text { font-size: clamp(6px, 2vh, 8px); color: #fff; text-shadow: 1px 1px 0 var(--ink); text-align: center; margin-bottom: 6px; line-height: 1.5; }

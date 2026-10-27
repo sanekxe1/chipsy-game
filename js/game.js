@@ -2,12 +2,18 @@
 // «Хочу чипсов»: два режима — уровни (levels.js) и бесконечный забег с лавиной.
 // Мир в логических пикселях (высота 180), канвас масштабируется под горизонтальный экран.
 
+// Рекорд бесконечного забега — один на всех (герои меняются прямо в забеге).
+// Раньше рекорды были у каждого героя свои — при первом чтении берём лучший из них.
 const Records = {
-  get(id) {
-    try { return parseInt(localStorage.getItem('chips_best_' + id), 10) || 0; } catch (e) { return 0; }
+  get() {
+    try {
+      const all = parseInt(localStorage.getItem('chips_best_all'), 10);
+      if (!isNaN(all)) return all;
+      return Math.max(0, ...['sasha', 'sonya', 'chips'].map(id => parseInt(localStorage.getItem('chips_best_' + id), 10) || 0));
+    } catch (e) { return 0; }
   },
-  set(id, v) {
-    try { localStorage.setItem('chips_best_' + id, String(v)); } catch (e) { /* нет доступа */ }
+  set(v) {
+    try { localStorage.setItem('chips_best_all', String(v)); } catch (e) { /* нет доступа */ }
   },
 };
 
@@ -82,6 +88,14 @@ const Game = (() => {
   let safe = { top: 0, left: 0, right: 0 }, safeL = { top: 0, left: 0, right: 0 };
   let running = false, paused = false, raf = 0, last = 0;
   let mode, ch, charId, theme, world, level;
+  // эстафета: genId — герой, под которого генерируется трасса впереди; relays — герои, ждущие на трассе
+  let genId, relays, nextRelayX, prevWorld, fadeT;
+  const HEROES = ['sasha', 'sonya', 'chips'];
+  const RELAY_HINT = {
+    sasha: 'Бустер — мотоцикл. Собирай чипсы!',
+    sonya: 'Бустер — энергетик. Собирай чипсы!',
+    chips: 'Бустер — пёрышко. Собирай корм, прыгай выше!',
+  };
   let t, camX, speed, mult, genX, firstChunk, nextBoostX, avW, hasAvalanche;
   let player, solids, near, enemies, items, parts, texts, flags;
   let lives, collected, kills, boostT, shakeT, banner, dying, deathT, best;
@@ -129,8 +143,11 @@ const Game = (() => {
 
   function setSafe(s) { safe = s; if (running) layout(false); }
 
+  function setHero(id) { charId = id; ch = CHARS[id]; theme = THEMES[ch.theme]; }
+
   function reset(id) {
-    charId = id; ch = CHARS[id]; theme = THEMES[ch.theme]; world = ch.world;
+    setHero(id);
+    world = ch.world; genId = id; relays = []; prevWorld = null; fadeT = 0;
     layout(true);
     t = 0; camX = 0; speed = 60; mult = 1; avW = 22;
     solids = []; near = []; enemies = []; items = []; parts = []; texts = []; flags = [];
@@ -152,7 +169,8 @@ const Game = (() => {
   }
 
   // headStart — купленный в копилке рывок: забег начинается сразу с 500 очков
-  function startEndless(id, headStart) {
+  function startEndless(headStart) {
+    const id = pick(HEROES);
     reset(id);
     mode = 'endless';
     hasAvalanche = true;
@@ -161,19 +179,20 @@ const Game = (() => {
     // с рывком скорость, лавина и трасса сразу такие, как на 500 очках
     if (headStart) t = timeForDist(startOffset);
     genX = startOffset - 32; firstChunk = true; nextBoostX = startOffset + 900; nextDrinkX = startOffset + 700;
+    nextRelayX = startOffset + rnd(3600, 4800);
     banner = headStart
       ? { text: 'РЫВОК +500!', sub: 'Стартуешь сразу с 500 очков', t: 2.4 }
-      : { text: 'ВПЕРЁД!', sub: id === 'chips' ? 'Собирай корм и беги от потопа!' : 'Собирай чипсы и беги от дедлайнов!', t: 2.4 };
-    best = Records.get(id);
+      : { text: ch.name.toUpperCase() + ' БЕЖИТ!', sub: RELAY_HINT[id], t: 2.4 };
+    best = Records.get();
     player.x = startOffset + Math.round(W * 0.35); player.y = GROUND_Y - ch.h;
     while (genX < camX + W + 80) genChunk();
     run();
   }
 
-  function startLevel(id, idx) {
-    reset(id);
+  function startLevel(idx) {
+    const def = CAMPAIGN[idx];
+    reset(def.hero);
     mode = 'level';
-    const def = LEVELS[id][idx];
     loadLevel(def, idx);
     hasAvalanche = level.escape;
     avW = level.escape ? 22 : -40;
@@ -220,40 +239,42 @@ const Game = (() => {
 
   // ---------------- Уровни ----------------
   function loadLevel(def, idx) {
-    const map = buildLevelMap(def);
+    const built = buildLevelMap(def), map = built.rows, heroAt = built.heroAt;
     const cols = map[0].length;
-    level = { def, idx, map, cols, w: cols * TILE, total: 0, finishX: cols * TILE - 64, finishY: GROUND_Y, escape: !!def.escape };
+    level = { def, idx, map, heroAt, cols, w: cols * TILE, total: 0, finishX: cols * TILE - 64, finishY: GROUND_Y, escape: !!def.escape };
     level.par = Math.round(cols / 5) + 6;
     spawn = { x: 40, y: GROUND_Y - ch.h };
     const at = (r, c) => (map[r] && map[r][c]) || '.';
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < cols; c++) {
         const cell = at(r, c), x = c * TILE, y = rowTop(r);
-        // одинаковые соседние клетки земли, полок и платформ склеиваются в один объект
+        const hc = CHARS[heroAt[c]];   // чей это участок уровня (меняется после эстафеты)
+        // одинаковые соседние клетки земли, полок и платформ склеиваются в один объект (в пределах одного мира)
         if ('G=~^'.includes(cell)) {
-          if (at(r, c - 1) === cell) continue;
+          if (at(r, c - 1) === cell && heroAt[c - 1] === heroAt[c]) continue;
           let n = 1;
-          while (at(r, c + n) === cell) n++;
-          if (cell === 'G') solids.push({ x, y, w: n * TILE, h: TILE, type: 'ground' });
+          while (at(r, c + n) === cell && heroAt[c + n] === heroAt[c]) n++;
+          if (cell === 'G') solids.push({ x, y, w: n * TILE, h: TILE, type: 'ground', world: hc.world });
           else if (cell === '=') solids.push({ x, y, w: n * TILE, h: 6, type: 'plank', oneway: true });
           else solids.push({ x, y, w: n * TILE, h: 6, type: 'mover', oneway: true, x0: x, y0: y, axis: cell === '~' ? 'x' : 'y', range: cell === '~' ? 40 : 32, phase: c * 0.7, dx: 0, dy: 0 });
           continue;
         }
         switch (cell) {
-          case 'B': solids.push({ x, y, w: TILE, h: TILE, type: 'brick', bumpT: 0 }); break;
+          case 'B': solids.push({ x, y, w: TILE, h: TILE, type: 'brick', bumpT: 0, world: hc.world }); break;
           case '?': solids.push({ x, y, w: TILE, h: TILE, type: 'q', bumpT: 0 }); level.total++; break;
           case '!': solids.push({ x, y, w: TILE, h: TILE, type: 'q', boost: true, bumpT: 0 }); break;
           case '#': solids.push({ x, y, w: TILE, h: TILE, type: 'box', bumpT: 0 }); break;
           case 'T': solids.push({ x, y: y + 6, w: TILE, h: 10, type: 'spring', bumpT: 0 }); break;
-          case 'c': addItem(x + 8, y + 2); level.total++; break;
-          case 'b': items.push({ type: 'boost', x: x + 1, y: y + 2, w: 14, h: 12, bob: 0 }); break;
-          case 'V': if (ch.theme === 'work') items.push({ type: 'vodka', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
-          case 'L': if (ch.theme === 'work') items.push({ type: 'beer', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
+          case 'c': addItem(x + 8, y + 2, hc.item); level.total++; break;
+          case 'b': items.push({ type: 'boost', x: x + 1, y: y + 2, w: 14, h: 12, bob: 0, boost: hc.boost }); break;
+          case 'V': if (hc.theme === 'work') items.push({ type: 'vodka', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
+          case 'L': if (hc.theme === 'work') items.push({ type: 'beer', x: x + 4, y: y + 1, w: 8, h: 14, bob: 0 }); break;
+          case 'R': relays.push({ x: x + 8, y: y + TILE, hero: built.relayTo[c] }); break;
           case 'C': flags.push({ x: x + 7, y: y + TILE, on: false }); break;
           case 'F': level.finishX = x; level.finishY = y + TILE; break;
           case 'P': spawn = { x: x + 3, y: y + TILE - ch.h }; break;
           default:
-            if (cell >= '1' && cell <= '6') spawnEnemy(x + 8, LEVEL_ENEMIES[ch.theme][+cell - 1], y + TILE);
+            if (cell >= '1' && cell <= '6') spawnEnemy(x + 8, LEVEL_ENEMIES[hc.theme][+cell - 1], y + TILE);
         }
       }
     }
@@ -262,21 +283,24 @@ const Game = (() => {
   function finishLevel(win) {
     stop();
     const stars = !win ? 0 : 1 + (collected >= Math.ceil(level.total * 0.8) ? 1 : 0) + (level.escape ? (lives === 3 ? 1 : 0) : (lvlTime <= level.par ? 1 : 0));
-    if (win) Progress.save(charId, level.idx, stars);
+    if (win) Progress.save(level.idx, stars);
     Bank.add(collected);
-    if (onLevelEnd) onLevelEnd({ won: win, stars, time: lvlTime, par: level.par, collected, total: level.total, lives, escape: level.escape, hero: charId, idx: level.idx, name: level.def.name });
+    if (onLevelEnd) onLevelEnd({ won: win, stars, time: lvlTime, par: level.par, collected, total: level.total, lives, escape: level.escape, idx: level.idx, name: level.def.name });
   }
 
   // ---------------- Бесконечный режим: генерация ----------------
   function addGround(x, w) {
-    const prev = solids.find(s => s.type === 'ground' && s.x + s.w === x);
+    const wd = CHARS[genId].world;
+    const prev = solids.find(s => s.type === 'ground' && s.x + s.w === x && s.world === wd);
     if (prev) prev.w += w;
-    else solids.push({ x, y: GROUND_Y, w, h: 80, type: 'ground' });
+    else solids.push({ x, y: GROUND_Y, w, h: 80, type: 'ground', world: wd });
   }
 
-  function addItem(cx, y) {
-    const sz = ITEM_SIZE[ch.item];
-    items.push({ type: 'item', x: cx - sz.w / 2, y, w: sz.w, h: sz.h, bob: Math.random() * 6 });
+  // kind — что лежит: чипсина или корм (по герою этого участка трассы)
+  function addItem(cx, y, kind) {
+    kind = kind || CHARS[genId].item;
+    const sz = ITEM_SIZE[kind];
+    items.push({ type: 'item', kind, x: cx - sz.w / 2, y, w: sz.w, h: sz.h, bob: Math.random() * 6 });
   }
 
   function itemLine(x, y, n) { for (let i = 0; i < n; i++) addItem(x + i * 14, y); }
@@ -304,6 +328,7 @@ const Game = (() => {
 
   function genChunk() {
     const d = Math.min(1, camX / 9000);
+    const gc = CHARS[genId];
     if (firstChunk) {
       firstChunk = false;
       const L = Math.ceil((W + 112) / 16) * 16;
@@ -324,7 +349,7 @@ const Game = (() => {
       const y = GROUND_Y - 48;
       const q = new Set([randi(0, n - 1)]);
       if (Math.random() < 0.4) q.add(randi(0, n - 1));
-      for (let i = 0; i < n; i++) solids.push({ x: px + i * 16, y, w: 16, h: 16, type: q.has(i) ? 'q' : 'brick', bumpT: 0 });
+      for (let i = 0; i < n; i++) solids.push({ x: px + i * 16, y, w: 16, h: 16, type: q.has(i) ? 'q' : 'brick', bumpT: 0, world: gc.world });
       if (Math.random() < 0.6) itemLine(px + 8, y - 14, n);
       if (Math.random() < 0.35) itemArc(px + n * 8, y - 52, 3, 30);
     } else if (r < 0.52) {
@@ -340,19 +365,27 @@ const Game = (() => {
 
     let n = Math.random() < 0.45 + 0.4 * d ? 1 : 0;
     if (Math.random() < d * 0.55) n++;
-    for (let i = 0; i < n; i++) spawnEnemy(x0 + 40 + Math.random() * (L - 64));
+    for (let i = 0; i < n; i++) spawnEnemy(x0 + 40 + Math.random() * (L - 64), pick(THEMES[gc.theme].pool));
 
     if (nextBoostX < x0 + L) {
       const bx = Math.max(nextBoostX, x0 + 24);
-      items.push({ type: 'boost', x: bx, y: GROUND_Y - 40, w: 14, h: 12, bob: 0 });
+      items.push({ type: 'boost', x: bx, y: GROUND_Y - 40, w: 14, h: 12, bob: 0, boost: gc.boost });
       nextBoostX = bx + 1300 + Math.random() * 1100;
     }
 
     // водка и пиво — только у Саши и Сони
-    if (ch.theme === 'work' && nextDrinkX < x0 + L) {
+    if (gc.theme === 'work' && nextDrinkX < x0 + L) {
       const dx = Math.max(nextDrinkX, x0 + 24);
       items.push({ type: Math.random() < 0.55 ? 'beer' : 'vodka', x: dx, y: GROUND_Y - 34, w: 8, h: 14, bob: Math.random() * 6 });
       nextDrinkX = dx + 900 + Math.random() * 900;
+    }
+
+    // эстафета: на трассе ждёт следующий герой; дальше трасса уже его (мир, враги, предметы)
+    if (nextRelayX < x0 + L) {
+      const next = pick(HEROES.filter(h => h !== genId));
+      relays.push({ x: x0 + 56, y: GROUND_Y, hero: next });
+      genId = next;
+      nextRelayX = x0 + L + rnd(4200, 6000);
     }
 
     genX = x0 + L;
@@ -404,11 +437,11 @@ const Game = (() => {
     if (s.type === 'q' && !s.used) {
       s.used = true;
       if (s.boost || (mode === 'endless' && Math.random() < 0.15 && boostT <= 0)) {
-        items.push({ type: 'boost', x: s.x + 1, y: s.y - 16, w: 14, h: 12, bob: 0 });
+        items.push({ type: 'boost', x: s.x + 1, y: s.y - 16, w: 14, h: 12, bob: 0, boost: ch.boost });
         Sound.play('bump');
       } else {
         const sz = ITEM_SIZE[ch.item];
-        items.push({ type: 'pop', x: s.x + 8 - sz.w / 2, y: s.y - sz.h, w: sz.w, h: sz.h, vy: -170, life: 0.45 });
+        items.push({ type: 'pop', kind: ch.item, x: s.x + 8 - sz.w / 2, y: s.y - sz.h, w: sz.w, h: sz.h, vy: -170, life: 0.45 });
         collect(s.x + 8, s.y - 8);
       }
     } else if (s.type === 'brick') {
@@ -420,10 +453,10 @@ const Game = (() => {
     }
   }
 
-  function collect(x, y) {
+  function collect(x, y, kind) {
     collected++;
     texts.push({ x, y, text: '+5', life: 0.8, color: '#ffd23f' });
-    Sound.play(ch.item === 'kibble' ? 'kibble' : 'crunch');
+    Sound.play((kind || ch.item) === 'kibble' ? 'kibble' : 'crunch');
     for (let i = 0; i < 6; i++) parts.push({ x, y: y + 4, vx: rnd(-50, 50), vy: rnd(-80, -20), life: 0.4, color: i % 2 ? '#ffd23f' : '#ffffff', size: 1 });
   }
 
@@ -477,6 +510,21 @@ const Game = (() => {
     p.inv = Math.max(p.inv, 1.5);
   }
 
+  // эстафета: следующий герой подхватывает забег — меняются мир, враги, предметы и бустеры
+  function switchHero(r) {
+    const p = player, old = charId, bottom = p.y + p.h;
+    setHero(r.hero);
+    prevWorld = world; world = ch.world; fadeT = 1.2;
+    p.w = ch.w; p.h = ch.h; p.y = bottom - p.h;
+    boostT = 0; beerT = 0; vodkaWarn = 0; swapT = 0; setSwap(false);
+    r.done = true; r.hero = old;          // на месте эстафеты остаётся прошлый герой
+    if (mode === 'level') spawn = { x: r.x + 6, y: r.y - ch.h };
+    banner = { text: ch.name.toUpperCase() + ' В ДЕЛЕ!', sub: RELAY_HINT[charId], t: 2.2 };
+    Sound.play('checkpoint'); Sound.play('boost');
+    haptic('medium');
+    for (let i = 0; i < 14; i++) parts.push({ x: p.x + p.w / 2, y: p.y + p.h / 2, vx: rnd(-90, 90), vy: rnd(-120, 10), life: 0.7, color: pick(['#ffd23f', '#ffffff', '#ff8fb8', '#5cc93a']), size: 2 });
+  }
+
   function startBoost() {
     boostT = BOOST_TIME;
     banner = { text: ch.boostText, t: 1.3 };
@@ -488,9 +536,9 @@ const Game = (() => {
     stop();
     const sc = score();
     const isNew = sc > best;
-    if (isNew) Records.set(charId, sc);
+    if (isNew) Records.set(sc);
     Bank.add(collected);
-    if (onOver) onOver({ score: sc, best: Math.max(sc, best), isNew, collected, kills, dist: Math.floor(camX / 16), charId });
+    if (onOver) onOver({ score: sc, best: Math.max(sc, best), isNew, collected, kills, dist: Math.floor(camX / 16) });
   }
 
   // ---------------- Обновление ----------------
@@ -543,6 +591,10 @@ const Game = (() => {
       s.dx = s.x - ox; s.dy = s.y - oy;
     }
     near = solids.filter(s => !s.dead && s.x + s.w > camX - 96 && s.x < camX + W + 96);
+
+    if (fadeT > 0) fadeT = Math.max(0, fadeT - dt);
+    for (const r of relays) if (!r.done && !dying && player.x + player.w / 2 >= r.x) switchHero(r);
+    if (mode === 'endless') relays = relays.filter(r => r.x > camX - 64);
 
     updatePlayer(dt);
     updateEnemies(dt);
@@ -761,7 +813,7 @@ const Game = (() => {
       } else if (it.type === 'vodka') {
         if (vodkaWarn <= 0 && swapT <= 0) { vodkaWarn = VODKA_WARN; Sound.play('tick'); }
         banner = { text: 'ОЙ, ВОДКА!', t: 1.4 };
-      } else collect(it.x + it.w / 2, it.y);
+      } else collect(it.x + it.w / 2, it.y, it.kind);
     }
   }
 
@@ -810,11 +862,11 @@ const Game = (() => {
   }
 
   function drawGround() {
-    const tiles = SPR.world[world];
     const edge = (x, y, h) => { ctx.fillStyle = '#1b1626'; ctx.fillRect(x, y, 1, h); };
     if (mode === 'endless') {
       for (const s of near) {
         if (s.type !== 'ground') continue;
+        const tiles = SPR.world[s.world || world];
         const sx = Math.round(s.x);
         for (let x = 0; x < s.w; x += 16) {
           const w = Math.min(16, s.w - x);
@@ -831,6 +883,7 @@ const Game = (() => {
     for (let r = 0; r < ROWS; r++) {
       for (let c = c0; c <= c1; c++) {
         if (map[r][c] !== 'G') continue;
+        const tiles = SPR.world[CHARS[level.heroAt[c]].world];
         const x = c * TILE, y = rowTop(r);
         ctx.drawImage(r > 0 && map[r - 1][c] === 'G' ? tiles.fill : tiles.top, x, y);
         if (map[r][c - 1] !== 'G') edge(x - 1, y, TILE);
@@ -838,13 +891,13 @@ const Game = (() => {
       }
     }
     if (rowTop(ROWS - 1) + TILE < H) {
-      for (let c = c0; c <= c1; c++) if (map[ROWS - 1][c] === 'G') ctx.drawImage(SPR.world[world].fill, c * TILE, rowTop(ROWS - 1) + TILE);
+      for (let c = c0; c <= c1; c++) if (map[ROWS - 1][c] === 'G') ctx.drawImage(SPR.world[CHARS[level.heroAt[c]].world].fill, c * TILE, rowTop(ROWS - 1) + TILE);
     }
   }
 
   function drawSolids() {
-    const tiles = SPR.world[world];
     for (const s of near) {
+      const tiles = SPR.world[s.world || world];
       if (s.type === 'ground') continue;
       let y = s.y;
       if (s.bumpT > 0 && s.type !== 'spring') y -= Math.sin((0.18 - s.bumpT) / 0.18 * Math.PI) * 4;
@@ -913,13 +966,13 @@ const Game = (() => {
         const cx = Math.round(it.x + it.w / 2), cy = Math.round(it.y + it.h / 2 + b);
         ctx.fillRect(cx - 11, cy, 2, 2); ctx.fillRect(cx + 9, cy, 2, 2);
         ctx.fillRect(cx, cy - 11, 2, 2); ctx.fillRect(cx, cy + 9, 2, 2);
-        spr(SPR[ch.boost], cx, it.y + it.h + 2 + b);
+        spr(SPR[it.boost || ch.boost], cx, it.y + it.h + 2 + b);
       } else if (it.type === 'beer' || it.type === 'vodka') {
         const b = Math.sin(t * 4 + it.bob) * 1.5;
         spr(SPR[it.type], it.x + it.w / 2, it.y + it.h + 1 + b);
       } else {
         const b = it.type === 'pop' ? 0 : Math.sin(t * 4 + it.bob) * 1.5;
-        spr(SPR[ch.item], it.x + it.w / 2, it.y + it.h + 1 + b);
+        spr(SPR[it.kind || ch.item], it.x + it.w / 2, it.y + it.h + 1 + b);
       }
     }
   }
@@ -952,6 +1005,22 @@ const Game = (() => {
     }
     ctx.fillStyle = '#ffffff';
     for (let i = 0; i < 4; i++) ctx.fillRect(cx - 6 + i * 4, Math.round(e.y - 48 + Math.sin(t * 12 + i) * 2), 2, 2);
+  }
+
+  // герои, ждущие эстафету: стоят лицом к нам с табличкой; после передачи — прошлый герой машет вслед
+  function drawRelays() {
+    for (const r of relays) {
+      if (r.x < camX - 32 || r.x > camX + W + 32) continue;
+      const set = SPR[r.hero];
+      const img = r.hero === 'chips' ? set.run[0] : set.run[1];
+      spr(img, r.x, r.y + 1, !r.done);
+      if (!r.done) {
+        label('ЭСТАФЕТА', r.x, r.y - img.height - 2);
+        if (Math.floor(t * 4) % 2) { ctx.fillStyle = '#ffd23f'; ctx.fillRect(Math.round(r.x - 1), Math.round(r.y - img.height - 18), 3, 3); }
+      } else if (Math.floor(t * 3) % 2) {
+        text('ПОКА!', Math.round(r.x), Math.round(r.y - img.height - 8), 5, '#ffffff', 'center');
+      }
+    }
   }
 
   function drawPlayer() {
@@ -1033,7 +1102,7 @@ const Game = (() => {
     const top = Math.round(safeL.top) + 6;
     const hx = Math.round(safeL.left) + 8 + (hasAvalanche ? 24 : 0);
     for (let i = 0; i < 3; i++) ctx.drawImage(i < lives ? SPR.heart : SPR.heartEmpty, hx + i * 10, top);
-    const icon = SPR[ch.item];
+    const icon = SPR.chip;
     ctx.drawImage(icon, hx, top + 11);
     text('x' + collected + (mode === 'level' ? '/' + level.total : ''), hx + 2 + icon.width, top + 13, 6, '#ffffff');
     if (mode === 'endless') {
@@ -1081,12 +1150,19 @@ const Game = (() => {
     ctx.setTransform(S, 0, 0, S, 0, 0);
     ctx.imageSmoothingEnabled = false;
     if (shakeT > 0) ctx.translate(Math.round(rnd(-2, 2)), Math.round(rnd(-2, 2)));
-    Worlds.draw(world, ctx, camX, W, H, GROUND_Y, t);
+    // после эстафеты новый мир плавно проявляется поверх старого
+    if (fadeT > 0 && prevWorld) {
+      Worlds.draw(prevWorld, ctx, camX, W, H, GROUND_Y, t);
+      ctx.globalAlpha = 1 - fadeT / 1.2;
+      Worlds.draw(world, ctx, camX, W, H, GROUND_Y, t);
+      ctx.globalAlpha = 1;
+    } else Worlds.draw(world, ctx, camX, W, H, GROUND_Y, t);
     ctx.save();
     ctx.translate(-Math.round(camX), 0);
     drawGround();
     if (mode === 'level') { drawFlags(); drawFinish(); }
     drawSolids();
+    drawRelays();
     drawItems();
     drawEnemies();
     drawPlayer();
@@ -1097,9 +1173,9 @@ const Game = (() => {
   }
 
   return {
-    init, startEndless, startLevel, stop, pause, resume, layout, setSafe, input, CHARS,
+    init, startEndless, startLevel, stop, pause, resume, layout, setSafe, input, CHARS, HEROES,
     // для отладки из консоли: Game.debug.spawn('dog'), Game.debug.boost()
-    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; }, state: () => ({ t: Math.round(t), speed: Math.round(speed), score: score() }), item: type => items.push({ type, x: player.x, y: player.y, w: 8, h: 14, bob: 0 }) },
+    debug: { spawn: (kind, dx) => spawnEnemy(camX + W * (dx || 0.7), kind, GROUND_Y), boost: () => startBoost(), tp: x => { player.x = x; player.y = 20; player.vy = 0; }, time: s => { t = s; }, state: () => ({ t: Math.round(t), speed: Math.round(speed), score: score() }), item: type => items.push({ type, x: player.x, y: player.y, w: 8, h: 14, bob: 0 }), relay: () => { nextRelayX = 0; }, hero: () => charId, pos: () => [Math.round(player.x), Math.round(camX), mode] },
     set onGameOver(fn) { onOver = fn; },
     set onLevelEnd(fn) { onLevelEnd = fn; },
     set onSwap(fn) { onSwap = fn; },
