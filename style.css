@@ -348,3 +348,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tut-dots i.on { background: var(--yellow); }
 
 .tr-ill { font-size: 7px; color: #2f8a2a; background: #e3f6dd; border: 2px solid var(--ink); padding: 3px 4px; }
+
+.tr-event .ev-up, .tr-event .ev-dn { display: inline-block; padding: 2px 4px; margin: 3px 2px 0 0; border: 2px solid var(--ink); }
+.tr-event .ev-up { background: #3f9e4a; }
+.tr-event .ev-dn { background: var(--red); }
