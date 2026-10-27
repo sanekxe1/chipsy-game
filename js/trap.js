@@ -381,7 +381,7 @@ const Trap = (() => {
     { id: 'roma', name: 'Рома', color: '#e33b2e', bed: 'bedR', pc: 'bedR', smoke: 'balcR', craveRate: 30, pay: 450 },
   ];
   const TASKS = {
-    work: 'МОНТАЖ', shop: 'МАГАЗИН', cook: 'ГОТОВИТЬ', rest: 'ОТДЫХ', sport: 'СПОРТ', rap: 'РЕП 300₽',
+    work: 'МОНТАЖ', shop: 'МАГАЗИН', cook: 'ГОТОВИТЬ', rest: 'ОТДЫХ', sport: 'СПОРТ', rap: 'РЕП',
   };
   // болезни: сколько дней, сколько здоровья в день отнимают, какая доля оплаты за монтаж остаётся, шанс заразить соседа за утро
   const ILLS = {
@@ -411,15 +411,27 @@ const Trap = (() => {
 
   // ---------------- Сложность растёт с каждым днём ----------------
   // всё считается от номера дня, поэтому старые сохранения подхватывают её сами
+  // баланс подобран ботом (tools/trap_bot.js, по 120 партий): новичок живёт ~34 дня, обычный игрок ~40,
+  // внимательный (энергетики под монтаж, не перекармливает) ~48, лучшие партии — 60–90 дней
+  const BAL = {
+    infl: 0.01, inflMax: 1,        // цены +1% в день, максимум ×2
+    wage: 0.005, wageMax: 0.4,     // оплата монтажа +0,5% в день, максимум +40% — медленнее цен
+    wear: 120, wearMax: 0.5,       // голод/курево/скука быстрее: +50% за 120 дней
+    sleep: 25,                     // сколько здоровья восстанавливает ночь (за день, в фазе сна)
+  };
   const dayN = () => game ? game.day : 1;
-  const inflation = () => 1 + Math.min(1, (dayN() - 1) * 0.01);            // цены +1% в день, максимум ×2
+  const inflation = () => 1 + Math.min(BAL.inflMax, (dayN() - 1) * BAL.infl);
+  const wageK = () => 1 + Math.min(BAL.wageMax, (dayN() - 1) * BAL.wage);
   const priceOf = base => Math.round(base * inflation() / 10) * 10;
   const RENT_EVERY = 7;
   // аренда раз в неделю: 750₽ в первую неделю, +150₽ за каждую следующую, максимум 2250₽
   const rentAt = day => Math.min(2250, 750 + 150 * (Math.floor(day / RENT_EVERY) - 1));
   const rentAmount = () => rentAt(dayN());
   const RAP_PRICE = 300, RAP_GAP = 6;  // «Реп над Волгой»: билет с каждого, не чаще раза в 6 дней
-  const wear = () => 1 + Math.min(0.5, (dayN() - 1) / 120);                // голод, курево и скука быстрее, до +50%
+  const RAP_FREE = 0.35;               // иногда друзья-организаторы зовут всех бесплатно
+  // цена билета на утреннем экране (флаги дня ещё в g.flags)
+  const rapPrice = () => (game.flags.rapFree ? 0 : RAP_PRICE);
+  const wear = () => 1 + Math.min(BAL.wearMax, (dayN() - 1) / BAL.wear);
   const moodBar = () => Math.min(60, 10 + dayN() * 0.75);                 // ниже этого настроения заказчик платит меньше
   const calmChance = () => 0.4 - Math.min(0.25, dayN() * 0.004);           // шанс спокойного утра падает с 40% до 15%
   const illBonus = () => Math.min(0.07, dayN() * 0.001);                   // болеют чаще
@@ -636,10 +648,13 @@ const Trap = (() => {
     if (forceEvent === 'rap' || (!forceEvent && rapReady && Math.random() < 0.3)) {
       forceEvent = null;
       g.lastRap = g.day;
-      g.flags = { rap: true };
+      const free = Math.random() < RAP_FREE;
+      g.flags = { rap: true, rapFree: free };
       return {
-        title: '🎤 РЕП НАД ВОЛГОЙ',
-        text: 'Сегодня концерт на набережной! Билет — ' + RAP_PRICE + '₽ с каждого. Кто пойдёт — поставь ему задание <b>«РЕП»</b>, можно не всем.<br>' +
+        title: '🎤 РЕП НАД ВОЛГОЙ' + (free ? ' — БЕСПЛАТНО!' : ''),
+        text: (free
+          ? 'Друзья организуют концерт на набережной и зовут всю хату <b>бесплатно</b>! Кто пойдёт — поставь ему задание <b>«РЕП»</b>.<br>'
+          : 'Сегодня концерт на набережной! Билет — ' + RAP_PRICE + '₽ с каждого. Кто пойдёт — поставь ему задание <b>«РЕП»</b>, можно не всем.<br>') +
           'Весь день на концерте: <span class="ev-up">+30 сытости</span> <span class="ev-up">+50 курева</span> <span class="ev-up">настроение на максимум</span>',
       };
     }
@@ -767,7 +782,9 @@ const Trap = (() => {
     g.flags = {};
     g.shopCart = cart;
     const rappers = g.flagsToday.rap ? present().filter(p => p.task === 'rap' && !busy(p)) : [];
-    if (rappers.length) { g.res.money -= RAP_PRICE * rappers.length; log('Билеты на «Реп над Волгой»: −' + RAP_PRICE * rappers.length + '₽'); }
+    const ticket = g.flagsToday.rapFree ? 0 : RAP_PRICE;
+    if (rappers.length && ticket) { g.res.money -= ticket * rappers.length; log('Билеты на «Реп над Волгой»: −' + ticket * rappers.length + '₽'); }
+    else if (rappers.length) log('На «Реп над Волгой» пустили бесплатно — по знакомству');
     const cooks = present().filter(p => p.task === 'cook' && !busy(p));
     const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) : 0;
     for (const p of present()) {
@@ -866,7 +883,7 @@ const Trap = (() => {
       if (p.hunger >= 100) p.health = cl(p.health - 30 * dd);
       if (p.crave >= 100) { p.happy = cl(p.happy - 20 * dd); p.health = cl(p.health - 4 * dd); }
       if (p.happy <= 0) p.health = cl(p.health - 10 * dd);
-      if (asleep && p.hunger < 80) p.health = cl(p.health + 25 * dd);
+      if (asleep && p.hunger < 80) p.health = cl(p.health + BAL.sleep * dd);
       const at = p.path.length === 0 && !p.hidden;
       if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 70 * dd);
       if (at && p.act === 'смотрит ТВ') p.happy = cl(p.happy + 25 * dd);
@@ -939,7 +956,7 @@ const Trap = (() => {
       if (p.broken) { log(p.name + ' без компьютера — монтировать не на чем'); continue; }
       if (p.ill && ILLS[p.ill.type].pay === 0) { log(p.name + ' болеет гриппом и не смог работать'); continue; }
       if (g.flagsToday.noPower) continue;
-      let pay = p.id === 'serezha' ? 150 + 60 * p.skill : p.pay;
+      let pay = Math.round((p.id === 'serezha' ? 150 + 60 * p.skill : p.pay) * wageK());
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
@@ -1282,12 +1299,12 @@ const Trap = (() => {
       }).join('') + '</div>';
       const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : [], g.flags.rap ? ['rap'] : []);
       // билеты: хватит ли денег ещё на одного
-      const rapFull = present().filter(x => x.task === 'rap').length * RAP_PRICE + RAP_PRICE > g.res.money;
+      const rapFull = rapPrice() && present().filter(x => x.task === 'rap').length * rapPrice() + rapPrice() > g.res.money;
       if (p.flags.gig) html += '<div class="tr-ill">💰 ХАЛТУРКА — монтаж сегодня ×2</div>';
       if (p.broken) html += '<div class="tr-ill">💻 БЕЗ КОМПЬЮТЕРА ЕЩЁ ' + p.broken + ' ДН. — монтаж не принесёт денег</div>';
       if (p.flags.search) html += '<div class="tr-ill">🔍 ИЩЕТ ТЕЛЕФОН ВЕСЬ ДЕНЬ — других заданий нет</div>';
       else if (p.flags.repair) html += '<div class="tr-ill">🔧 ЧИНИТ ТРУБУ ВЕСЬ ДЕНЬ — других заданий нет</div>';
-      else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '"' + (k === 'rap' && p.task !== 'rap' && rapFull ? ' disabled' : '') + '>' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
+      else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '"' + (k === 'rap' && p.task !== 'rap' && rapFull ? ' disabled' : '') + '>' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : k === 'rap' ? 'РЕП ' + (rapPrice() ? rapPrice() + '₽' : 'БЕСПЛАТНО') : TASKS[k]) + '</button>').join('') + '</div>';
       c.innerHTML = html;
       c.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { p.plan[b.dataset.k] = !p.plan[b.dataset.k]; Sound.play('click'); renderPlan(); });
       c.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
@@ -1327,7 +1344,7 @@ const Trap = (() => {
     $('tr-shop-list').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { cart[b.dataset.m] = Math.max(0, cart[b.dataset.m] - 1); Sound.play('click'); renderShop(); });
   }
   // билеты на концерт оплачиваются в начале дня — в магазине на них уже не тратим
-  function rapCost() { return game.flags.rap ? present().filter(p => p.task === 'rap').length * RAP_PRICE : 0; }
+  function rapCost() { return game.flags.rap ? present().filter(p => p.task === 'rap').length * rapPrice() : 0; }
   function buy() {
     const spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     game.res.money -= spent;
@@ -1395,7 +1412,7 @@ const Trap = (() => {
         row('МАГАЗИН', 'покупаешь еду, сигареты, пиво, энергетики. Жилец уходит на полдня и не работает') +
         row('ГОТОВИТЬ', up('сытость от еды всем') + ' ' + up('настроение всем') + '<br><small>у Ромы еда получается сытнее</small>') +
         row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
-        row('РЕП 300₽', 'только в день концерта «Реп над Волгой»: жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
+        row('РЕП', 'только в день концерта «Реп над Волгой» (300₽, а иногда друзья зовут бесплатно): жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
         row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
     },
     {
@@ -1421,7 +1438,7 @@ const Trap = (() => {
     {
       title: 'ЧЕМ ДАЛЬШЕ — ТЕМ ТРУДНЕЕ',
       html: () => '<table>' +
-        row('💸 ЦЕНЫ', 'в магазине дорожают на 1% в день (до ×2)') +
+        row('💸 ЦЕНЫ', 'в магазине дорожают на 1% в день (до ×2). За монтаж тоже платят больше, но медленнее') +
         row('🏠 АРЕНДА', 'каждые 7 дней хозяин забирает аренду — от 750₽, с каждой неделей больше. Не хватит денег — заберёт всё и всем ' + dn('настроение')) +
         row('😩 УСТАЛОСТЬ', 'голод, желание курить и скука со временем растут быстрее') +
         row('🎬 ЗАКАЗЧИКИ', 'если у жильца плохое настроение, за монтаж платят меньше — и требования растут') +
@@ -1554,6 +1571,13 @@ const Trap = (() => {
       nextEvent: k => { forceEvent = k; },
       gather: () => gather(),
       day: d => { game.day = d; },
+      // для симуляции баланса ботом (scratchpad): прямой доступ к партии, без экранов
+      raw: () => game,
+      bal: BAL,
+      price: base => priceOf(base),
+      begin: c => { overlay('tr-morning', false); if (c) game.res.money -= SHOP.reduce((a, it) => a + (c[it.id] || 0) * priceOf(it.price), 0); beginDay(c); },
+      answer: open => answerKnock(open),
+      step: dt => updateDay(dt),
       // промотать игровое время на sec секунд (для проверок)
       tick: sec => { for (let i = 0; i < sec * 30 && game.phase === 'day' && !inUI; i++) updateDay(1 / 30); },
     },
