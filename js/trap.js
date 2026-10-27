@@ -398,6 +398,11 @@ const Trap = (() => {
     gf: { name: 'Девушка Серёжи', color: '#9fd0f0', text: 'Пришла девушка Серёжи' },
   };
   const GF_DAY = 10;               // на 10-й день у Серёжи появляется девушка
+  const PARTY_DAY = 15;            // на 15-й день — разовая возможность устроить тусовку
+  // к кому гость приходит и рядом с кем держится
+  const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
+  // места на диване и ковре у телевизора Серёжи, где все собираются
+  const TV_SPOTS = [[63, 42], [63, 49], [63, 56], [77, 44], [77, 54], [86, 40], [86, 60], [95, 46], [95, 56], [86, 50]];
 
   let game = null;                 // текущая партия
   let speed = 1, simPaused = false, inUI = false;
@@ -442,10 +447,10 @@ const Trap = (() => {
   function snapshot() {
     const g = game;
     return {
-      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, poops: g.poops, log: g.log,
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, partyOffered: !!g.partyOffered, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
-        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, room: p.room,
+        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y,
       })),
     };
   }
@@ -466,7 +471,7 @@ const Trap = (() => {
       res: { food: 6, cigs: 6, money: 1200, beer: 1, energy: 1 },
       people: RESIDENTS.map(r => ({
         ...r, hunger: 20, health: 100, happy: 70, crave: 20, alive: true, away: 0, skill: 0,
-        x: POI[r.bed].x, y: POI[r.bed].y, room: POI[r.bed].room, path: [], act: 'спит', task: 'work',
+        x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false }, sched: [], hidden: false, flags: {},
       })),
       guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null,
@@ -483,7 +488,7 @@ const Trap = (() => {
   function continueGame(d) {
     createGame();
     const g = game;
-    g.day = d.day; g.res = d.res; g.gf = !!d.gf; g.poops = d.poops || []; g.log = d.log || [];
+    g.day = d.day; g.res = d.res; g.gf = !!d.gf; g.partyOffered = !!d.partyOffered; g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -499,29 +504,43 @@ const Trap = (() => {
   function log(s) { game.log.push(s); }
 
   // ---------------- Маршруты по квартире ----------------
-  function route(p, poi) {
-    const to = POI[poi];
-    const pts = [];
-    const fromRoom = p.room;
-    if (p.y < 12 && ROOM_DOOR[fromRoom]) pts.push(fromRoom === 'damir' ? [27, 16] : [138, 16]); // уходим с балкона
-    if (fromRoom !== to.room) {
-      if (ROOM_DOOR[fromRoom]) { pts.push(ROOM_DOOR[fromRoom].in, ROOM_DOOR[fromRoom].out); }
-      const fx = ROOM_DOOR[fromRoom] ? ROOM_DOOR[fromRoom].out[0] : p.x;
-      pts.push([fx, HALL_Y]);
-      if (ROOM_DOOR[to.room]) {
-        pts.push([ROOM_DOOR[to.room].out[0], HALL_Y], ROOM_DOOR[to.room].out, ROOM_DOOR[to.room].in);
-      } else pts.push([to.x, HALL_Y]);
+  // В какой комнате точка — по плану (балкон считается частью своей комнаты, прихожая — коридором).
+  // Комнату определяем по координатам, а не запоминаем: иначе, сменив цель на полпути, жилец срезал бы сквозь стену.
+  const ROOM_OF = { balconyD: 'damir', balconyR: 'roma', entrance: 'hall' };
+  function roomAt(x, y) {
+    for (const rm of ROOMS) {
+      if (x >= rm.x && x <= rm.x + rm.w && y >= rm.y && y <= rm.y + rm.h) return ROOM_OF[rm.id] || rm.id;
     }
-    if (to.via) pts.push(to.via);
-    pts.push([to.x, to.y]);
-    p.path = pts.map(([x, y]) => ({ x, y }));
-    p.dest = poi;
+    return 'hall';
   }
+  const BALCONY_DOOR = { damir: [27, 16], roma: [138, 16] };
+
+  // маршрут до точки {x, y}: из своей комнаты через её дверь в коридор, по коридору к нужной двери, внутрь
+  function routeTo(o, to) {
+    const pts = [];
+    const from = roomAt(o.x, o.y), dest = roomAt(to.x, to.y);
+    const onBalcony = o.y < 12 && BALCONY_DOOR[from];
+    const toBalcony = to.y < 12 && BALCONY_DOOR[dest];
+    if (onBalcony && !(toBalcony && from === dest)) pts.push(BALCONY_DOOR[from]);
+    if (from !== dest) {
+      if (ROOM_DOOR[from]) pts.push(ROOM_DOOR[from].in, ROOM_DOOR[from].out);
+      pts.push([ROOM_DOOR[from] ? ROOM_DOOR[from].out[0] : o.x, HALL_Y]);
+      if (ROOM_DOOR[dest]) pts.push([ROOM_DOOR[dest].out[0], HALL_Y], ROOM_DOOR[dest].out, ROOM_DOOR[dest].in);
+      else pts.push([to.x, HALL_Y]);
+    } else if (from === 'hall' && Math.abs(to.x - o.x) > 8) {
+      // коридор Г-образный (с прихожей) — идём по его середине, чтобы не срезать угол санузла
+      pts.push([o.x, HALL_Y], [to.x, HALL_Y]);
+    }
+    if (toBalcony && !(onBalcony && from === dest)) pts.push(BALCONY_DOOR[dest]);
+    pts.push([to.x, to.y]);
+    o.path = pts.map(([x, y]) => ({ x, y }));
+  }
+  function route(o, poi) { routeTo(o, POI[poi]); o.dest = poi; }
 
   function walk(o, dt) {
     if (!o.path || !o.path.length) return true;
     const tgt = o.path[0], dx = tgt.x - o.x, dy = tgt.y - o.y, d = Math.hypot(dx, dy), step = 30 * dt;
-    if (d <= step) { o.x = tgt.x; o.y = tgt.y; o.path.shift(); if (!o.path.length && o.dest) o.room = POI[o.dest].room; return !o.path.length; }
+    if (d <= step) { o.x = tgt.x; o.y = tgt.y; o.path.shift(); return !o.path.length; }
     o.x += dx / d * step; o.y += dy / d * step;
     return false;
   }
@@ -537,7 +556,7 @@ const Trap = (() => {
         p.away--;
         if (!p.away && p.alive) { game.res.food += 3; log(p.name + ' вернулся от родителей и привёз еды (+3 еды)'); }
       }
-      if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.room = POI[p.bed].room; p.path = []; p.hidden = false; }
+      if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.path = []; p.hidden = false; }
       p.flags = {};
     }
     // автосохранение: если закрыть игру днём, она продолжится с этого утра
@@ -552,6 +571,16 @@ const Trap = (() => {
     if (g.day >= GF_DAY && !g.gf && S.alive) {
       g.gf = true; S.happy = cl(S.happy + 40);
       return { title: 'Серёжа влюбился!', text: 'Серёжа познакомился с девушкой. Теперь она иногда заходит в гости — Серёже от этого очень хорошо.' };
+    }
+    if (g.day >= PARTY_DAY && !g.partyOffered) {
+      g.partyOffered = true;
+      return {
+        title: 'ТУСОВКА?', text: 'Сегодня можно устроить тусовку — придут сразу все друзья. Курево и настроение у всех будут на максимуме, но здоровье −30% и бюджет −30%. Такой шанс один раз.',
+        choices: [
+          { label: 'УСТРОИТЬ ТУСОВКУ', fn: () => { g.partyToday = true; } },
+          { label: 'НЕ СЕГОДНЯ', fn: () => {} },
+        ],
+      };
     }
     if (Math.random() < 0.4) return null;
     const pool = [];
@@ -595,6 +624,10 @@ const Trap = (() => {
     // гости и кот на сегодня
     g.knockAt = Math.random() < 0.5 ? rnd(0.22, 0.6) : null;
     g.catAt = Math.random() < 0.22 ? rnd(0.25, 0.55) : null;
+    // иногда вечером все собираются у Серёжи смотреть телевизор
+    g.gatherAt = Math.random() < 0.35 ? rnd(0.6, 0.7) : null;
+    g.partyAt = null;
+    if (g.partyToday) { g.partyToday = false; g.partyAt = 0.22; g.gatherAt = 0.3; g.knockAt = null; }
     g.shopperBack = false;
     Sound.startMusic('trap');
   }
@@ -626,6 +659,8 @@ const Trap = (() => {
     // стук в дверь и кот
     if (g.knockAt && prev < g.knockAt && ph >= g.knockAt) knock();
     if (g.catAt && prev < g.catAt && ph >= g.catAt) catComes();
+    if (g.partyAt && prev < g.partyAt && ph >= g.partyAt) startParty();
+    if (g.gatherAt && prev < g.gatherAt && ph >= g.gatherAt) gather();
 
     for (const p of present()) {
       // расписание
@@ -638,7 +673,7 @@ const Trap = (() => {
       }
       if (!p.hidden && walk(p, dt) && p.goingShop) { p.hidden = true; p.goingShop = false; p.backAt = 0.55; log(p.name + ' ушёл в магазин'); }
       if (p.hidden && ph >= p.backAt) {
-        p.hidden = false; p.x = POI.door.x; p.y = POI.door.y; p.room = 'hall';
+        p.hidden = false; p.x = POI.door.x; p.y = POI.door.y;
         route(p, 'fridge'); p.act = 'разбирает пакеты';
         if (g.shopCart) { for (const k in g.shopCart) g.res[k] += g.shopCart[k]; g.shopCart = null; say(p, 'ПОКУПКИ!'); Sound.play('coin'); }
       }
@@ -654,6 +689,7 @@ const Trap = (() => {
       if (asleep && p.hunger < 80) p.health = cl(p.health + 25 * dd);
       const at = p.path.length === 0 && !p.hidden;
       if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 30 * dd);
+      if (at && p.act === 'смотрит ТВ') p.happy = cl(p.happy + 25 * dd);
       if (at && p.act === 'дота') p.happy = cl(p.happy + 40 * dd);
       if (at && p.act === 'качается') { p.health = cl(p.health + 18 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
       if (at && p.act === 'монтаж') p.happy = cl(p.happy - 5 * dd);
@@ -665,15 +701,23 @@ const Trap = (() => {
     // гости, кот
     for (const gu of g.guests) {
       walk(gu, dt);
-      if (!gu.leaving && ph >= gu.until) { gu.leaving = true; gu.path = [{ x: POI.hallMid.x, y: HALL_Y }, { x: POI.door.x, y: HALL_Y }, { x: POI.door.x, y: POI.door.y }]; }
-      if (gu.leaving && !gu.path.length) gu.gone = true;
+      if (!gu.leaving && ph >= gu.until) { gu.leaving = true; routeTo(gu, POI.door); }
+      if (gu.leaving) { if (!gu.path.length) gu.gone = true; continue; }
+      // девушки держатся рядом со своими парнями; остальные — у телевизора (или все вместе на диване)
+      gu.reT -= dt;
+      if (gu.reT <= 0 && !gu.watching) {
+        gu.reT = 1.5;
+        const host = HOSTS[gu.id] && byId(HOSTS[gu.id]);
+        const spot = host && host.alive && !host.away && !host.hidden ? { x: host.x + 7, y: host.y + 1 } : gu.spot;
+        if (Math.hypot(spot.x - gu.x, spot.y - gu.y) > 10 && !gu.path.length) routeTo(gu, spot);
+      }
     }
     g.guests = g.guests.filter(gu => !gu.gone);
     if (g.cat) {
       if (walk(g.cat, dt)) {
         if (g.cat.steps-- > 0) {
           const spot = pick([POI.hallMid, POI.hallEnd, POI.table, { x: 30, y: 104 }, { x: 100, y: 98 }]);
-          g.cat.path = [{ x: spot.x + rnd(-6, 6), y: spot.y + rnd(-3, 3) }];
+          routeTo(g.cat, { x: spot.x + rnd(-6, 6), y: spot.y + rnd(-3, 3) });
           if (Math.random() < 0.3 && !g.cat.pooped) { g.cat.pooped = true; g.poops.push({ x: g.cat.x, y: g.cat.y + 3 }); log('Кот нагадил на пол! Нажми на кучку, чтобы убрать'); }
         } else g.cat = null;
       }
@@ -721,21 +765,35 @@ const Trap = (() => {
   }
 
   // ---------------- Гости и кот ----------------
-  function knock() {
+  function knock(force) {
     const g = game, D = byId('damir'), Rm = byId('roma'), S = byId('serezha');
     const who = ['anya', 'sashasonya'];
     if (Rm.alive) who.push('polina');
     if (D.alive && !D.away) who.push('vika');
     if (g.gf && S.alive) who.push('gf', 'gf');
-    g.knock = pick(who);
+    // кто уже в гостях, второй раз не стучит
+    const free = who.filter(id => !g.guests.some(gu => gu.id === id));
+    if (!force && !free.length) return;
+    g.knock = force || pick(free);
     Sound.play('bump');
     setTimeout(() => Sound.play('bump'), 180);
     showKnock(g.knock);
   }
 
-  function letIn(id) {
+  // гость входит в квартиру; spot — где он сидит, если рядом нет «его» жильца
+  function addGuest(id, until) {
     const g = game, f = FRIENDS[id];
-    g.guests.push({ id, name: f.name, color: f.color, x: POI.door.x, y: POI.door.y, path: [{ x: POI.door.x, y: HALL_Y }, { x: 86, y: HALL_Y }, { x: 87, y: 92 }, { x: 87, y: 76 }, { x: 80 + rnd(-4, 8), y: 58 + rnd(-6, 6) }], until: Math.min(0.85, g.dayT / DAY + 0.2) });
+    const gu = { id, name: f.name, color: f.color, x: POI.door.x, y: POI.door.y, path: [], until, reT: 1.5, spot: { x: 80 + rnd(-4, 10), y: 50 + rnd(-8, 10) } };
+    // девушки сразу идут к своему парню, остальные — к телевизору
+    const host = HOSTS[id] && byId(HOSTS[id]);
+    routeTo(gu, host && host.alive && !host.away && !host.hidden ? { x: host.x + 7, y: host.y + 1 } : gu.spot);
+    g.guests.push(gu);
+    return gu;
+  }
+
+  function letIn(id) {
+    const g = game;
+    addGuest(id, Math.min(0.85, g.dayT / DAY + 0.2));
     const all = present();
     if (id === 'anya') { g.res.money += 500; if (g.res.food > 0) g.res.food--; log('Аня принесла заказ на съёмку: +500₽ (и съела порцию)'); }
     if (id === 'sashasonya') { g.res.food += 2; all.forEach(p => { p.happy = cl(p.happy + 12); }); log('Саша и Соня принесли чипсы: +2 еды, всем веселее'); }
@@ -745,8 +803,46 @@ const Trap = (() => {
     Sound.play('checkpoint');
   }
 
+  // все, кто дома, и гости собираются на диване и ковре у телевизора Серёжи
+  function gather() {
+    const g = game, ph = g.dayT / DAY;
+    let i = 0;
+    for (const p of present()) {
+      if (p.hidden) continue;
+      p.sched = p.sched.filter(it => it.at >= 0.86);
+      const [x, y] = TV_SPOTS[i++ % TV_SPOTS.length];
+      routeTo(p, { x, y });
+      p.act = 'смотрит ТВ';
+    }
+    for (const gu of g.guests) {
+      if (gu.leaving) continue;
+      const [x, y] = TV_SPOTS[i++ % TV_SPOTS.length];
+      gu.watching = true;
+      gu.until = Math.max(gu.until, Math.min(0.86, ph + 0.15));
+      routeTo(gu, { x, y });
+    }
+    log('Все собрались у Серёжи смотреть телевизор');
+  }
+
+  // разовая тусовка на 15-й день: приходят все друзья
+  function startParty() {
+    const g = game;
+    const ids = ['anya', 'sashasonya', 'polina', 'vika'].concat(g.gf ? ['gf'] : []);
+    ids.forEach((id, k) => { const gu = addGuest(id, 0.86); gu.x += k * 3; });
+    for (const p of present()) {
+      p.crave = 0;
+      p.happy = 100;
+      p.health = cl(p.health * 0.7);
+      say(p, 'ТУСОВКА!');
+    }
+    g.res.money = Math.floor(g.res.money * 0.7);
+    log('Тусовка! Пришли все друзья: курево и настроение на максимуме, здоровье и бюджет −30%');
+    Sound.play('win');
+  }
+
   function catComes() {
-    game.cat = { x: POI.door.x, y: POI.door.y, path: [{ x: POI.door.x, y: HALL_Y }], steps: 5, pooped: false };
+    game.cat = { x: POI.door.x, y: POI.door.y, path: [], steps: 5, pooped: false };
+    routeTo(game.cat, POI.hallMid);
     log('Кот из подъезда пробрался в квартиру');
     Sound.play('meow');
   }
@@ -803,7 +899,7 @@ const Trap = (() => {
       const sleeping = p.act === 'спит' && !p.path.length;
       figure(TRSPR[p.id], p.x, p.y, p.path.length > 0, p.name.toUpperCase());
       if (sleeping) { ctx.font = '4px "Press Start 2P", monospace'; ctx.fillStyle = '#ffffff'; ctx.fillText('Z', ox + p.x + 5, oy + p.y - 3 - Math.floor(t * 2) % 3); }
-      else if (!p.path.length && p.act) {
+      else if (!p.path.length && p.act && p.act !== 'смотрит ТВ') {
         ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         ctx.fillStyle = C.ink; ctx.fillText(p.act, ox + p.x + 0.5, oy + p.y + 4.5);
         ctx.fillStyle = '#ffe08a'; ctx.fillText(p.act, ox + p.x, oy + p.y + 4);
@@ -1069,14 +1165,16 @@ const Trap = (() => {
         row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
     },
     {
-      title: 'ГОСТИ И КОТ',
-      html: () => '<p>Днём стучат в дверь. Можно впустить или ответить «нас нет дома».</p><table>' +
+      title: 'ГОСТИ, КОТ И ТУСОВКИ',
+      html: () => '<p>Днём стучат в дверь. Можно впустить или ответить «нас нет дома». Полина держится рядом с Ромой, Вика — с Дамиром.</p><table>' +
         row(face('anya') + 'АНЯ', up('500₽ — заказ на съёмку') + ' ' + dn('1 еда')) +
         row(face('sasha') + face('sonya') + 'САША И СОНЯ', up('2 еды — чипсы') + ' ' + up('настроение всем')) +
         row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета')) +
         row(face('vika') + 'ВИКА', up('2 еды') + ' ' + up('сытость всем') + ' ' + up('настроение Дамиру', 1)) +
         row(face('gf') + 'ДЕВУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
-        row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') + '</table>',
+        row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') +
+        row('📺 ВЕЧЕР У ТЕЛЕКА', 'иногда все собираются на диване у Серёжи: ' + up('настроение всем')) +
+        row('🎉 ТУСОВКА (15-й день)', 'разовый шанс: приходят все друзья. ' + up('курево на максимум', 1) + ' ' + up('настроение на максимум', 1) + ' ' + dn('30% здоровья', 1) + ' ' + dn('30% бюджета', 1)) + '</table>',
     },
     {
       title: 'ХАРАКТЕРЫ',
@@ -1191,10 +1289,18 @@ const Trap = (() => {
     // для отладки из консоли: Trap.debug.skip() — промотать день, Trap.debug.state()
     debug: {
       skip: () => { if (game && game.phase === 'day') game.dayT = DAY - 0.1; },
+      guests: () => game.guests.map(g => ({ id: g.id, x: Math.round(g.x), y: Math.round(g.y), path: g.path.map(p => [Math.round(p.x), Math.round(p.y)]), reT: +g.reT.toFixed(1) })),
       state: () => game && { day: game.day, phase: game.phase, res: game.res, people: game.people.map(p => ({ id: p.id, h: Math.round(p.hunger), hp: Math.round(p.health), hap: Math.round(p.happy), cr: Math.round(p.crave), alive: p.alive, away: p.away, act: p.act })) },
-      knock: () => knock(),
+      knock: id => knock(id),
       cat: () => catComes(),
       starve: () => { for (const p of game.people) { p.hunger = 100; p.health = 5; } },
+      // проверка маршрутов: путь из (x, y) в (tx, ty), план комнат и дверей
+      route: (x, y, tx, ty) => { const o = { x, y, path: [] }; routeTo(o, { x: tx, y: ty }); return o.path; },
+      plan: () => ({ ROOMS, DOORS, roomAt }),
+      party: () => { game.partyToday = true; },
+      gather: () => gather(),
+      // промотать игровое время на sec секунд (для проверок)
+      tick: sec => { for (let i = 0; i < sec * 30 && game.phase === 'day' && !inUI; i++) updateDay(1 / 30); },
     },
   };
 })();
