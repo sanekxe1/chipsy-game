@@ -381,7 +381,7 @@ const Trap = (() => {
     { id: 'roma', name: 'Рома', color: '#e33b2e', bed: 'bedR', pc: 'bedR', smoke: 'balcR', craveRate: 30, pay: 450 },
   ];
   const TASKS = {
-    work: 'МОНТАЖ', shop: 'МАГАЗИН', cook: 'ГОТОВИТЬ', rest: 'ОТДЫХ', sport: 'СПОРТ',
+    work: 'МОНТАЖ', shop: 'МАГАЗИН', cook: 'ГОТОВИТЬ', rest: 'ОТДЫХ', sport: 'СПОРТ', rap: 'РЕП 300₽',
   };
   // болезни: сколько дней, сколько здоровья в день отнимают, какая доля оплаты за монтаж остаётся, шанс заразить соседа за утро
   const ILLS = {
@@ -394,7 +394,7 @@ const Trap = (() => {
     { id: 'cigs', name: 'СИГАРЕТЫ', price: 220 },
     { id: 'beer', name: 'ПИВО', price: 120 },
     { id: 'energy', name: 'ЭНЕРГЕТИК', price: 110 },
-    { id: 'meds', name: 'ЛЕКАРСТВА', price: 250 },
+    { id: 'meds', name: 'ЛЕКАРСТВА', price: 230 },
   ];
   // друзья, которые стучат в дверь
   const FRIENDS = {
@@ -415,7 +415,10 @@ const Trap = (() => {
   const inflation = () => 1 + Math.min(1, (dayN() - 1) * 0.01);            // цены +1% в день, максимум ×2
   const priceOf = base => Math.round(base * inflation() / 10) * 10;
   const RENT_EVERY = 7;
-  const rentAmount = () => Math.min(4500, 1500 + 300 * (Math.floor(dayN() / RENT_EVERY) - 1)); // аренда раз в неделю, растёт
+  // аренда раз в неделю: 750₽ в первую неделю, +150₽ за каждую следующую, максимум 2250₽
+  const rentAt = day => Math.min(2250, 750 + 150 * (Math.floor(day / RENT_EVERY) - 1));
+  const rentAmount = () => rentAt(dayN());
+  const RAP_PRICE = 300, RAP_GAP = 6;  // «Реп над Волгой»: билет с каждого, не чаще раза в 6 дней
   const wear = () => 1 + Math.min(0.5, (dayN() - 1) / 120);                // голод, курево и скука быстрее, до +50%
   const moodBar = () => Math.min(60, 10 + dayN() * 0.75);                 // ниже этого настроения заказчик платит меньше
   const calmChance = () => 0.4 - Math.min(0.25, dayN() * 0.004);           // шанс спокойного утра падает с 40% до 15%
@@ -469,10 +472,10 @@ const Trap = (() => {
   function snapshot() {
     const g = game;
     return {
-      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, flood: !!g.flood, poops: g.poops, log: g.log,
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, lastRap: g.lastRap || 0, flood: !!g.flood, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
-        skill: p.skill, task: p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill, broken: p.broken || 0,
+        skill: p.skill, task: p.task === 'rap' ? (p.taskBefore || 'work') : p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill, broken: p.broken || 0,
       })),
     };
   }
@@ -496,7 +499,7 @@ const Trap = (() => {
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
-      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, flood: false,
+      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, flood: false,
     };
     simPaused = false;
   }
@@ -512,7 +515,8 @@ const Trap = (() => {
     const g = game;
     g.day = d.day; g.res = Object.assign({ meds: 0 }, d.res); g.gf = !!d.gf; g.flood = !!d.flood;
     // старые сохранения: была одна тусовка на 15-й день
-    g.lastParty = d.lastParty || (d.partyOffered ? d.day : 0); g.poops = d.poops || []; g.log = d.log || [];
+    g.lastParty = d.lastParty || (d.partyOffered ? d.day : 0);
+    g.lastRap = d.lastRap || 0; g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -585,6 +589,7 @@ const Trap = (() => {
       if (p.alive && !p.away) { p.x = POI[p.bed].x; p.y = POI[p.bed].y; p.path = []; p.hidden = false; }
       p.flags = {};
       if (p.broken > 0) p.broken--;
+      if (p.task === 'rap') p.task = p.taskBefore || 'work';
     }
     payRent();
     illnessMorning();
@@ -608,7 +613,7 @@ const Trap = (() => {
   // кто будет чинить потоп: лучше Дамир, иначе любой, кто дома
   const fixer = () => { const D = byId('damir'); return D.alive && !D.away ? D : present()[0]; };
   function floodEvent(first) {
-    const g = game, master = priceOf(1500), parts = priceOf(400), f = fixer();
+    const g = game, master = priceOf(500), parts = priceOf(130), f = fixer();
     return {
       title: first ? '💧 ПОТОП!' : '💧 В квартире всё ещё потоп',
       text: (first ? 'Прорвало трубу в ванной — вода по всей квартире.<br>' : 'Пол мокрый, пахнет сыростью.<br>') +
@@ -626,6 +631,18 @@ const Trap = (() => {
     const g = game, S = byId('serezha'), D = byId('damir'), Rm = byId('roma');
     // пока не починили потоп — каждое утро напоминание (важнее тусовки и случайных событий)
     if (g.flood && !forceEvent) return floodEvent(false);
+    // «Реп над Волгой»: не чаще раза в 6 дней; кто пойдёт — выбирается заданием «РЕП»
+    const rapReady = g.day >= 4 && g.day - (g.lastRap || 0) >= RAP_GAP;
+    if (forceEvent === 'rap' || (!forceEvent && rapReady && Math.random() < 0.3)) {
+      forceEvent = null;
+      g.lastRap = g.day;
+      g.flags = { rap: true };
+      return {
+        title: '🎤 РЕП НАД ВОЛГОЙ',
+        text: 'Сегодня концерт на набережной! Билет — ' + RAP_PRICE + '₽ с каждого. Кто пойдёт — поставь ему задание <b>«РЕП»</b>, можно не всем.<br>' +
+          'Весь день на концерте: <span class="ev-up">+30 сытости</span> <span class="ev-up">+50 курева</span> <span class="ev-up">настроение на максимум</span>',
+      };
+    }
     // тусовка: не раньше 10-го дня и не чаще раза в 5 дней, раньше прочих событий
     const partyReady = g.day >= PARTY_DAY && g.day - (g.lastParty || 0) >= PARTY_GAP;
     if (forceEvent === 'party' || (!forceEvent && partyReady && Math.random() < 0.35)) {
@@ -652,6 +669,9 @@ const Trap = (() => {
     if (S.alive && !S.away) pool.push('oversleep');
     if (D.alive && !D.away && g.day > 2) pool.push('trip');
     pool.push('lights', 'pizza');
+    // хорошие новости тоже бывают
+    if (g.day >= 3) pool.push('gig', 'gig');
+    if (g.day >= 25) pool.push('gig');
     // со временем добавляются новые неприятности, и их становится больше
     if (g.day >= 6) pool.push('flood');
     if (g.day >= 8) pool.push('laptop');
@@ -674,6 +694,13 @@ const Trap = (() => {
       };
     }
     if (k === 'flood') { g.flood = true; return floodEvent(true); }
+    if (k === 'gig') {
+      const p = pick(present().filter(x => !x.broken && !x.ill));
+      if (!p) return null;
+      p.flags.gig = true;
+      const who = p.id === 'serezha' ? 'Серёже' : p.id === 'damir' ? 'Дамиру' : 'Роме';
+      return { title: '💰 Халтурка!', text: who + ' предложили лёгкий монтаж с хорошей оплатой — сегодня заплатят <b>вдвое больше</b>, и работа не портит настроение.<br>Не забудь поставить ему задание <b>«МОНТАЖ»</b>.' };
+    }
     if (k === 'laptop') {
       const p = pick(present().filter(x => !x.broken)) || present()[0], cost = priceOf(1200);
       if (!p) return null;
@@ -739,6 +766,8 @@ const Trap = (() => {
     g.flagsToday = g.flags || {};
     g.flags = {};
     g.shopCart = cart;
+    const rappers = g.flagsToday.rap ? present().filter(p => p.task === 'rap' && !busy(p)) : [];
+    if (rappers.length) { g.res.money -= RAP_PRICE * rappers.length; log('Билеты на «Реп над Волгой»: −' + RAP_PRICE * rappers.length + '₽'); }
     const cooks = present().filter(p => p.task === 'cook' && !busy(p));
     const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) : 0;
     for (const p of present()) {
@@ -776,7 +805,8 @@ const Trap = (() => {
     else if (main === 'cook') { s.push({ at: 0.16, poi: 'stove', act: 'готовит' }); s.push({ at: 0.45, poi: 'table', act: 'ест' }); }
     else if (main === 'rest') s.push({ at: 0.18, poi: p.id === 'serezha' ? 'pcS' : 'tv', act: p.id === 'serezha' ? 'дота' : 'отдыхает' });
     else if (main === 'sport') s.push({ at: 0.18, poi: 'sport', act: 'качается' });
-    else if (main === 'shop') s.push({ at: 0.14, poi: 'door', act: 'в магазин', shop: true });
+    else if (main === 'shop') s.push({ at: 0.14, poi: 'door', act: 'в магазин', leave: 'shop' });
+    else if (main === 'rap' && game.flagsToday.rap) s.push({ at: 0.1, poi: 'door', act: 'на рэп', leave: 'rap' });
     else if (main === 'search') for (let a = 0.16; a < 0.7; a += 0.09) s.push({ at: a, poi: pick(['hallMid', 'table', 'tv', 'bath', 'laundry', p.bed]), act: 'ищет телефон' });
     else if (main === 'repair') for (let a = 0.16; a < 0.7; a += 0.12) s.push({ at: a, poi: pick(['bath', 'bath', 'hallMid', 'laundry']), act: 'чинит трубу' });
     s.push({ at: 0.74, poi: pick(['tv', 'table', 'hallEnd']), act: 'болтает' });
@@ -805,13 +835,26 @@ const Trap = (() => {
         if (p.hidden) continue;
         route(p, it.poi);
         p.act = it.act;
-        p.goingShop = !!it.shop;
+        p.going = it.leave || null;
       }
-      if (!p.hidden && walk(p, dt) && p.goingShop) { p.hidden = true; p.goingShop = false; p.backAt = 0.55; log(p.name + ' ушёл в магазин'); }
+      if (!p.hidden && walk(p, dt) && p.going) {
+        p.hidden = p.going; p.going = null;
+        p.backAt = p.hidden === 'rap' ? 0.82 : 0.55;
+        log(p.name + (p.hidden === 'rap' ? ' уехал на «Реп над Волгой»' : ' ушёл в магазин'));
+      }
       if (p.hidden && ph >= p.backAt) {
+        const was = p.hidden;
         p.hidden = false; p.x = POI.door.x; p.y = POI.door.y;
-        route(p, 'fridge'); p.act = 'разбирает пакеты';
-        if (g.shopCart) { for (const k in g.shopCart) g.res[k] += g.shopCart[k]; g.shopCart = null; say(p, 'ПОКУПКИ!'); Sound.play('coin'); }
+        if (was === 'rap') {
+          p.hunger = cl(p.hunger - 30); p.crave = cl(p.crave - 50); p.happy = 100;
+          route(p, p.bed); p.act = 'под впечатлением'; say(p, 'КАЙФ!');
+          log(p.name + ' вернулся с концерта: сытый, накуренный, счастливый');
+        } else {
+          route(p, 'fridge'); p.act = 'разбирает пакеты';
+          if (g.shopCart) { for (const k in g.shopCart) g.res[k] += g.shopCart[k]; g.shopCart = null; say(p, 'ПОКУПКИ!'); Sound.play('coin'); }
+          // повезло: нашёл деньги по дороге
+          if (Math.random() < 0.15) { g.res.money += 500; say(p, '+500₽!'); log('💵 ' + p.name + ' нашёл на улице 500₽'); }
+        }
       }
 
       // параметры
@@ -825,11 +868,11 @@ const Trap = (() => {
       if (p.happy <= 0) p.health = cl(p.health - 10 * dd);
       if (asleep && p.hunger < 80) p.health = cl(p.health + 25 * dd);
       const at = p.path.length === 0 && !p.hidden;
-      if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 30 * dd);
+      if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 70 * dd);
       if (at && p.act === 'смотрит ТВ') p.happy = cl(p.happy + 25 * dd);
-      if (at && p.act === 'дота') p.happy = cl(p.happy + 40 * dd);
+      if (at && p.act === 'дота') p.happy = cl(p.happy + 90 * dd);
       if (at && p.act === 'качается') { p.health = cl(p.health + 18 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
-      if (at && p.act === 'монтаж') p.happy = cl(p.happy - 5 * dd);
+      if (at && p.act === 'монтаж' && !p.flags.gig) p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
       if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙП'); }
       if (p.ill) {
@@ -900,6 +943,7 @@ const Trap = (() => {
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
+      if (p.flags.gig) { pay *= 2; log('💰 ' + p.name + ' сделал халтурку — двойная оплата'); }
       if (p.happy < moodBar()) { pay = Math.round(pay * 0.6); log('Заказчику не понравился монтаж ' + (p.id === 'serezha' ? 'Серёжи' : p.id === 'damir' ? 'Дамира' : 'Ромы') + ' — без настроения работа хуже (−40%)'); }
       if (g.flagsToday.latePay) pay = Math.round(pay / 2);
       if (p.ill) { pay = Math.round(pay * ILLS[p.ill.type].pay); log(p.name + ' работал больным — заплатили меньше'); }
@@ -1236,20 +1280,26 @@ const Trap = (() => {
         const can = p.plan[k] || (used(k) < g.res[k] && (k !== 'meds' || p.ill));
         return '<button data-k="' + k + '" class="tr-it' + (p.plan[k] ? ' on' : '') + '"' + (can ? '' : ' disabled') + '>' + ic + '</button>';
       }).join('') + '</div>';
-      const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : []);
+      const tasks = ['work', 'shop', 'cook', 'rest'].concat(p.id === 'roma' ? ['sport'] : [], g.flags.rap ? ['rap'] : []);
+      // билеты: хватит ли денег ещё на одного
+      const rapFull = present().filter(x => x.task === 'rap').length * RAP_PRICE + RAP_PRICE > g.res.money;
+      if (p.flags.gig) html += '<div class="tr-ill">💰 ХАЛТУРКА — монтаж сегодня ×2</div>';
       if (p.broken) html += '<div class="tr-ill">💻 БЕЗ КОМПЬЮТЕРА ЕЩЁ ' + p.broken + ' ДН. — монтаж не принесёт денег</div>';
       if (p.flags.search) html += '<div class="tr-ill">🔍 ИЩЕТ ТЕЛЕФОН ВЕСЬ ДЕНЬ — других заданий нет</div>';
       else if (p.flags.repair) html += '<div class="tr-ill">🔧 ЧИНИТ ТРУБУ ВЕСЬ ДЕНЬ — других заданий нет</div>';
-      else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '">' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
+      else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '"' + (k === 'rap' && p.task !== 'rap' && rapFull ? ' disabled' : '') + '>' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : TASKS[k]) + '</button>').join('') + '</div>';
       c.innerHTML = html;
       c.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { p.plan[b.dataset.k] = !p.plan[b.dataset.k]; Sound.play('click'); renderPlan(); });
-      c.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { p.task = b.dataset.t; Sound.play('click'); renderPlan(); });
+      c.querySelectorAll('[data-t]').forEach(b => b.onclick = () => {
+        if (b.dataset.t === 'rap' && p.task !== 'rap') p.taskBefore = p.task;
+        p.task = b.dataset.t; Sound.play('click'); renderPlan();
+      });
       wrap.appendChild(c);
     }
     const r = g.res;
     const toRent = RENT_EVERY - g.day % RENT_EVERY;
     $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy + ' · лекарства ' + r.meds +
-      ' · аренда ' + (toRent === RENT_EVERY ? 'через неделю' : 'через ' + toRent + ' дн.') + ' (' + Math.min(4500, 1500 + 300 * Math.floor((g.day + toRent) / RENT_EVERY - 1)) + '₽)';
+      ' · аренда ' + (toRent === RENT_EVERY ? 'через неделю' : 'через ' + toRent + ' дн.') + ' (' + rentAt(g.day + toRent) + '₽)';
     $('tr-go').disabled = !!waiting;
   }
 
@@ -1269,13 +1319,15 @@ const Trap = (() => {
     overlay('tr-shop', true);
   }
   function renderShop() {
-    const money = game.res.money, spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
+    const money = game.res.money - rapCost(), spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     $('tr-shop-list').innerHTML = SHOP.map(it =>
       '<div class="tr-shop-row"><span>' + it.name + ' · ' + priceOf(it.price) + '₽</span><span><button data-m="' + it.id + '">−</button><b>' + cart[it.id] + '</b><button data-p="' + it.id + '"' + (spent + priceOf(it.price) > money ? ' disabled' : '') + '>+</button></span></div>').join('');
     $('tr-shop-total').textContent = 'Итого: ' + spent + '₽ из ' + money + '₽';
     $('tr-shop-list').querySelectorAll('[data-p]').forEach(b => b.onclick = () => { cart[b.dataset.p]++; Sound.play('click'); renderShop(); });
     $('tr-shop-list').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { cart[b.dataset.m] = Math.max(0, cart[b.dataset.m] - 1); Sound.play('click'); renderShop(); });
   }
+  // билеты на концерт оплачиваются в начале дня — в магазине на них уже не тратим
+  function rapCost() { return game.flags.rap ? present().filter(p => p.task === 'rap').length * RAP_PRICE : 0; }
   function buy() {
     const spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     game.res.money -= spent;
@@ -1292,7 +1344,7 @@ const Trap = (() => {
   function answerKnock(open) {
     overlay('tr-knock', false);
     if (open) letIn(game.knock);
-    else log(FRIENDS[game.knock].name + ' постучали, но никто не открыл');
+    else log(FRIENDS[game.knock].name + (game.knock === 'sashasonya' ? ' постучали' : ' постучал' + (['anya', 'polina', 'vika', 'gf'].includes(game.knock) ? 'а' : '')) + ', но никто не открыл');
     game.knock = null;
   }
 
@@ -1343,6 +1395,7 @@ const Trap = (() => {
         row('МАГАЗИН', 'покупаешь еду, сигареты, пиво, энергетики. Жилец уходит на полдня и не работает') +
         row('ГОТОВИТЬ', up('сытость от еды всем') + ' ' + up('настроение всем') + '<br><small>у Ромы еда получается сытнее</small>') +
         row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
+        row('РЕП 300₽', 'только в день концерта «Реп над Волгой»: жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
         row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
     },
     {
@@ -1369,7 +1422,7 @@ const Trap = (() => {
       title: 'ЧЕМ ДАЛЬШЕ — ТЕМ ТРУДНЕЕ',
       html: () => '<table>' +
         row('💸 ЦЕНЫ', 'в магазине дорожают на 1% в день (до ×2)') +
-        row('🏠 АРЕНДА', 'каждые 7 дней хозяин забирает аренду — от 1500₽, с каждой неделей больше. Не хватит денег — заберёт всё и всем ' + dn('настроение')) +
+        row('🏠 АРЕНДА', 'каждые 7 дней хозяин забирает аренду — от 750₽, с каждой неделей больше. Не хватит денег — заберёт всё и всем ' + dn('настроение')) +
         row('😩 УСТАЛОСТЬ', 'голод, желание курить и скука со временем растут быстрее') +
         row('🎬 ЗАКАЗЧИКИ', 'если у жильца плохое настроение, за монтаж платят меньше — и требования растут') +
         row('⚠ НЕПРИЯТНОСТИ', 'спокойных дней всё меньше: потоп, сломанный компьютер, полиция, задержка оплаты. Чаще болеют') + '</table>' +
