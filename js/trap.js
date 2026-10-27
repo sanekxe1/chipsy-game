@@ -402,7 +402,7 @@ const Trap = (() => {
     sashasonya: { name: 'Саша и Соня', color: '#ff8fb8', text: 'Саша и Соня пришли с чипсами' },
     polina: { name: 'Полина', color: '#c9a0ff', text: 'Пришла Полина, девушка Ромы' },
     vika: { name: 'Вика', color: '#ff9a3c', text: 'Пришла Вика, девушка Дамира — обещает приготовить ужин' },
-    gf: { name: 'Девушка Серёжи', color: '#9fd0f0', text: 'Пришла девушка Серёжи' },
+    gf: { name: 'Альтушка Серёжи', color: '#9fd0f0', text: 'Пришла альтушка Серёжи' },
     savely: { name: 'Савелий', color: '#d8322a', text: 'Савелий из Тольятти заехал на своей Гранте' },
   };
   const GF_DAY = 10;               // на 10-й день у Серёжи появляется девушка
@@ -676,7 +676,7 @@ const Trap = (() => {
     }
     if (g.day >= GF_DAY && !g.gf && S.alive) {
       g.gf = true; S.happy = cl(S.happy + 40);
-      return { title: 'Серёжа влюбился!', text: 'Серёжа познакомился с девушкой. Теперь она иногда заходит в гости — Серёже от этого очень хорошо.' };
+      return { title: 'Серёжа влюбился!', text: 'Серёжа познакомился с альтушкой. Теперь она иногда заходит в гости — Серёже от этого очень хорошо.' };
     }
     if (!forceEvent && Math.random() < calmChance()) return null;
     const pool = [];
@@ -1027,7 +1027,7 @@ const Trap = (() => {
       log('Савелий заехал: ' + parts.join(', '));
     }
     if (id === 'vika') { const d = byId('damir'); d.happy = cl(d.happy + 30); g.res.food += 2; all.forEach(p => { p.hunger = cl(p.hunger - 15); }); log('Вика приготовила ужин на всех: +2 еды, все сыты'); }
-    if (id === 'gf') { const s = byId('serezha'); s.happy = cl(s.happy + 30); if (g.res.food > 0) g.res.food--; log('Девушка Серёжи зашла в гости: Серёже хорошо'); }
+    if (id === 'gf') { const s = byId('serezha'); s.happy = cl(s.happy + 30); if (g.res.food > 0) g.res.food--; log('Альтушка Серёжи зашла в гости: Серёже хорошо'); }
     Sound.play('checkpoint');
   }
 
@@ -1423,7 +1423,7 @@ const Trap = (() => {
         row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета') + '<br><small>иногда наоборот приносит еду и сигареты</small>') +
         row(face('vika') + 'ВИКА', up('2 еды') + ' ' + up('сытость всем') + ' ' + up('настроение Дамиру', 1)) +
         row(face('savely') + 'САВЕЛИЙ', 'то привезёт ' + up('2 энергетика') + ', то выпьет ' + dn('1 энергетик') + '<br><small>сигарету иногда стреляет, иногда курит свои</small>') +
-        row(face('gf') + 'ДЕВУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
+        row(face('gf') + 'АЛЬТУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
         row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') +
         row('📺 ВЕЧЕР У ТЕЛЕКА', 'иногда все собираются на диване у Серёжи: ' + up('настроение всем')) + '</table>',
     },
@@ -1529,6 +1529,8 @@ const Trap = (() => {
       continueGame(pendingSave);
     };
     $('tr-help').onclick = () => { Sound.play('click'); openTutorial(false); };
+    // обучение можно открыть и утром, пока планируешь день — окно планирования остаётся под ним
+    $('tr-morning-help').onclick = () => { Sound.play('click'); openTutorial(false); };
     $('tr-intro-help').onclick = () => { Sound.play('click'); openTutorial(false); };
     $('tr-tut-next').onclick = () => { Sound.play('click'); if (tutPage < TUTORIAL.length - 1) { tutPage++; renderTut(); } else closeTutorial(); };
     $('tr-tut-prev').onclick = () => { Sound.play('click'); if (tutPage) { tutPage--; renderTut(); } };

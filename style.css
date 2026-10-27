@@ -358,3 +358,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .chap { font: inherit; font-size: clamp(6px, 2vh, 8px); padding: 6px 8px; background: #e6d3a3; color: var(--ink); border: 2px solid var(--ink); cursor: pointer; }
 .chap.on { background: var(--yellow); box-shadow: 0 3px 0 var(--ink); }
 .chapter-text { font-size: clamp(6px, 2vh, 8px); color: #fff; text-shadow: 1px 1px 0 var(--ink); text-align: center; margin-bottom: 6px; line-height: 1.5; }
+
+/* «Трэп хата»: кнопка обучения в окне планирования дня; обучение — поверх этого окна */
+.tr-morning-head { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
+.tr-morning-head .h2 { margin: 0; }
+#scr-trap #tr-tut { z-index: 3; }
