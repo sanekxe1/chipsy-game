@@ -817,7 +817,9 @@ const Trap = (() => {
     if (rappers.length && ticket) { g.res.money -= ticket * rappers.length; log('Билеты на «Реп над Волгой»: −' + ticket * rappers.length + '₽'); }
     else if (rappers.length) log('На «Реп над Волгой» пустили бесплатно — по знакомству');
     const cooks = present().filter(p => p.task === 'cook' && !busy(p));
-    const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) : 0;
+    // каждый следующий повар помогает: порция сытнее ещё на 5, ужин — ещё на 10
+    const extraCooks = Math.max(0, cooks.length - 1);
+    const cookBonus = cooks.length ? 15 + (cooks.some(p => p.id === 'roma') ? 5 : 0) + 5 * extraCooks : 0;
     for (const p of present()) {
       if (p.plan.food && g.res.food > 0) { g.res.food--; p.hunger = cl(p.hunger - 45 - cookBonus); p.flags.ate = true; }
       if (p.plan.cigs && g.res.cigs > 0) { g.res.cigs--; p.crave = cl(p.crave - 65); p.flags.smoked = true; }
@@ -842,7 +844,7 @@ const Trap = (() => {
     // кто готовит — к середине дня общий ужин (запасы еды не тратит)
     g.dinnerAt = cooks.length ? 0.45 : null;
     g.dinnerBy = cooks.map(p => p.name);
-    g.dinnerFull = cooks.some(p => p.id === 'roma') ? 35 : 25;
+    g.dinnerFull = (cooks.some(p => p.id === 'roma') ? 35 : 25) + 10 * extraCooks;
     if (g.partyToday) { g.partyToday = false; g.partyAt = 0.22; g.gatherAt = 0.3; g.knockAt = null; }
     g.shopperBack = false;
     Sound.startMusic('trap');
@@ -1081,7 +1083,8 @@ const Trap = (() => {
   // ужин от повара: всем, кто дома, −25 голода (у Ромы сытнее — −35)
   function dinner() {
     const g = game;
-    serveDinner(g.dinnerFull, g.dinnerBy.join(' и ') + ' ' + (g.dinnerBy.length > 1 ? 'приготовили' : 'приготовил') + ' ужин');
+    const by = g.dinnerBy.length > 1 ? g.dinnerBy.slice(0, -1).join(', ') + ' и ' + g.dinnerBy[g.dinnerBy.length - 1] : g.dinnerBy[0];
+    serveDinner(g.dinnerFull, by + ' ' + (g.dinnerBy.length > 1 ? 'приготовили' : 'приготовил') + ' ужин');
   }
   function serveDinner(full, who) {
     const eaters = present().filter(p => !p.hidden);
@@ -1499,7 +1502,7 @@ const Trap = (() => {
       html: () => '<table>' +
         row('МОНТАЖ', up('деньги вечером') + ' ' + dn('настроение') + '<br><small>Дамир и Рома — 450₽, Серёжа — от 150₽ и растёт с каждым днём</small>') +
         row('МАГАЗИН', 'покупаешь еду, сигареты, пиво, энергетики. Жилец уходит на полдня и не работает') +
-        row('ГОТОВИТЬ', up('ужин всем — сытость', 1) + ' без трат еды ' + up('утренняя порция сытнее') + ' ' + up('настроение всем') + '<br><small>повар в этот день не монтирует; у Ромы ужин сытнее</small>') +
+        row('ГОТОВИТЬ', up('ужин всем — сытость', 1) + ' без трат еды ' + up('утренняя порция сытнее') + ' ' + up('настроение всем') + '<br><small>повар в этот день не монтирует; у Ромы ужин сытнее; вдвоём — ещё сытнее</small>') +
         row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
         row('РЕП', 'только в день концерта «Реп над Волгой» (300₽, а иногда друзья зовут бесплатно): жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
         row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>' +
