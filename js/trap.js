@@ -461,6 +461,12 @@ const Trap = (() => {
   const moodBar = () => Math.min(60, 10 + dayN() * 0.75);                 // ниже этого настроения заказчик платит меньше
   const calmChance = () => 0.4 - Math.min(0.25, dayN() * 0.004);           // шанс спокойного утра падает с 40% до 15%
   const illBonus = () => Math.min(0.07, dayN() * 0.001);                   // болеют чаще
+  // вейп тоже понемногу сильнее — но вдвое медленнее, чем растёт тяга: 30 → 37,5 к 61-му дню
+  const vapeAmt = () => 30 * (1 + Math.min(0.25, (dayN() - 1) / 240));
+  // «шишь» из магазина
+  const BUD_CHANCE = 0.12;           // шанс найти по дороге в магазин
+  const BUD_FOOD = 6;                // сколько еды уходит на «пожрать» после
+  const BUD_DAYS = 2;                // сколько дней тяга к куреву не растёт
   // к кому гость приходит и рядом с кем держится
   const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
   // места на диване и ковре у телевизора Серёжи, где все собираются
@@ -510,7 +516,7 @@ const Trap = (() => {
   function snapshot() {
     const g = game;
     return {
-      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, lastRap: g.lastRap || 0, lastDoctor: g.lastDoctor || 0, flood: !!g.flood, poops: g.poops, log: g.log,
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, lastRap: g.lastRap || 0, lastDoctor: g.lastDoctor || 0, flood: !!g.flood, bud: g.bud || null, highUntil: g.highUntil || 0, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
         skill: p.skill, task: p.task === 'rap' ? (p.taskBefore || 'work') : p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill, broken: p.broken || 0,
@@ -537,7 +543,7 @@ const Trap = (() => {
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
-      guests: [], cat: null, poops: [], texts: [], puffs: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, lastDoctor: 0, flood: false, doctorToday: false,
+      guests: [], cat: null, poops: [], texts: [], puffs: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, lastDoctor: 0, flood: false, doctorToday: false, bud: null, highUntil: 0,
     };
     simPaused = false;
   }
@@ -555,7 +561,7 @@ const Trap = (() => {
     // старые сохранения: была одна тусовка на 15-й день
     g.lastParty = d.lastParty || (d.partyOffered ? d.day : 0);
     g.lastRap = d.lastRap || 0;
-    g.lastDoctor = d.lastDoctor || 0; g.poops = d.poops || []; g.log = d.log || [];
+    g.lastDoctor = d.lastDoctor || 0; g.bud = d.bud || null; g.highUntil = d.highUntil || 0; g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -651,6 +657,37 @@ const Trap = (() => {
     for (const p of present()) p.happy = cl(p.happy - 25);
   }
 
+  // шишь: курят все, кто дома, или никто
+  function budEvent() {
+    const g = game, who = g.bud;
+    g.bud = null;
+    const short = Math.max(0, BUD_FOOD - g.res.food);
+    return {
+      title: '🌿 ШИШЬ',
+      text: '<img class="ev-pic" src="' + TRSPR.bud.toDataURL() + '" alt="">' + who + ' вчера нашёл по дороге шишь. Курят все вместе — или никто.<br>' +
+        '<span class="ev-up">+20 здоровья</span> <span class="ev-up">+65 настроения</span> <span class="ev-up">курево на максимум ' + BUD_DAYS + ' дня</span><br>' +
+        '<span class="ev-dn">потом пробьёт на хавчик: −' + BUD_FOOD + ' еды</span>' +
+        (short ? ' <span class="ev-dn">еды не хватит — всем ещё −' + 15 * short + ' сытости</span>' : ''),
+      choices: [
+        { label: 'СКУРИТЬ ВСЕМ', fn: smokeBud },
+        { label: 'ВЫБРОСИТЬ', fn: () => { log('Шишь выбросили'); } },
+      ],
+    };
+  }
+  function smokeBud() {
+    const g = game, ps = present();
+    const eaten = Math.min(BUD_FOOD, g.res.food), short = BUD_FOOD - eaten;
+    g.res.food -= eaten;
+    for (const p of ps) {
+      p.health = cl(p.health + 20);
+      p.happy = cl(p.happy + 65);
+      p.crave = 0;
+      if (short) p.hunger = cl(p.hunger + 15 * short);
+    }
+    g.highUntil = g.day + BUD_DAYS;
+    log('🌿 Скурили шишь всей хатой: ' + (short ? 'съели всю еду (' + eaten + ') и всё равно голодные' : 'потом съели ' + eaten + ' еды'));
+  }
+
   // кто будет чинить потоп: лучше Дамир, иначе любой, кто дома
   const fixer = () => { const D = byId('damir'); return D.alive && !D.away ? D : present()[0]; };
   function floodEvent(first) {
@@ -672,6 +709,7 @@ const Trap = (() => {
     const g = game, S = byId('serezha'), D = byId('damir'), Rm = byId('roma');
     // пока не починили потоп — каждое утро напоминание (важнее тусовки и случайных событий)
     if (g.flood && !forceEvent) return floodEvent(false);
+    if (g.bud && !forceEvent) return budEvent();
     // «Реп над Волгой»: не чаще раза в 6 дней; кто пойдёт — выбирается заданием «РЕП»
     const funReady = g.day - Math.max(g.lastRap || 0, g.lastParty || 0) >= FUN_GAP;
     const rapReady = funReady && g.day >= 4 && g.day - (g.lastRap || 0) >= RAP_GAP;
@@ -918,6 +956,7 @@ const Trap = (() => {
           if (g.shopCart) { for (const k in g.shopCart) g.res[k] += g.shopCart[k]; g.shopCart = null; say(p, 'ПОКУПКИ!'); Sound.play('coin'); }
           // повезло: нашёл деньги по дороге
           if (Math.random() < 0.15) { g.res.money += 500; say(p, '+500₽!'); log('💵 ' + p.name + ' нашёл на улице 500₽'); }
+          if (!g.bud && Math.random() < BUD_CHANCE) { g.bud = p.name; say(p, 'НАШЁЛ ШИШЬ!'); log('🌿 ' + p.name + ' нашёл по дороге шишь'); }
         }
       }
 
@@ -925,7 +964,7 @@ const Trap = (() => {
       const asleep = ph >= 0.9;
       const k = wear();
       p.hunger = cl(p.hunger + 30 * k * dd);
-      p.crave = cl(p.crave + p.craveRate * k * dd);
+      p.crave = g.highUntil > g.day ? 0 : cl(p.crave + p.craveRate * k * dd);
       p.happy = cl(p.happy - 9 * k * dd - g.poops.length * 12 * dd - (g.flood ? 10 * dd : 0));
       if (p.hunger >= 100) p.health = cl(p.health - 30 * dd);
       if (p.crave >= 100) { p.happy = cl(p.happy - 20 * dd); p.health = cl(p.health - 4 * dd); }
@@ -938,13 +977,13 @@ const Trap = (() => {
       if (at && p.act === 'качается') { p.health = cl(p.health + 36 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
       if (at && p.act === 'монтаж' && !p.flags.gig) p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
-      if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙПНЕЙШН'); vapor(p); if (!p.hidden) p.dabT = 1.8; }
+      if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - vapeAmt()); say(p, 'ВЕЙПНЕЙШН'); vapor(p); if (!p.hidden) p.dabT = 1.8; }
       // Дамир иногда стреляет вейп у Серёжи (если тот дома); раз в день решается, стрельнёт или нет
       if (p.id === 'damir' && !p.flags.vapeTry && p.crave > 75) {
         p.flags.vapeTry = true;
         const S = byId('serezha');
         if (S.alive && !S.away && !S.hidden && Math.random() < 0.5) {
-          p.crave = cl(p.crave - 30); say(p, 'ДАЙ ВЕЙП'); vapor(p);
+          p.crave = cl(p.crave - vapeAmt()); say(p, 'ДАЙ ВЕЙП'); vapor(p);
           log('Дамир стрельнул вейп у Серёжи');
         }
       }
@@ -994,7 +1033,7 @@ const Trap = (() => {
 
   // облачко пара от вейпа: несколько клубов поднимаются и тают
   function vapor(p) {
-    for (let i = 0; i < 5; i++) game.puffs.push({ x: p.x + rnd(-2, 4), y: p.y - 6 - i * 2, vx: rnd(-3, 5), r: 1.5 + i * 0.4, life: 1.6 + i * 0.25, max: 1.6 + i * 0.25 });
+    for (let i = 0; i < 5; i++) game.puffs.push({ x: p.x + rnd(-2, 4), y: p.y - 15 - i * 2, vx: rnd(-3, 5), r: 1.5 + i * 0.4, life: 1.6 + i * 0.25, max: 1.6 + i * 0.25 });
   }
 
   function die(p) {
@@ -1699,6 +1738,7 @@ const Trap = (() => {
       nextEvent: k => { forceEvent = k; },
       gather: () => gather(),
       day: d => { game.day = d; },
+      bud: () => { game.bud = 'Дамир'; },
       // для симуляции баланса ботом (scratchpad): прямой доступ к партии, без экранов
       raw: () => game,
       bal: BAL,

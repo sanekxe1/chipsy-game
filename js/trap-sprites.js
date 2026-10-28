@@ -85,6 +85,11 @@ const TRSPR = {};
   TRSPR.savely = make('cap', 'aviators', 'flannel', { h: '#2a1f1a', q: '#d8322a', Q: '#8a1c16', c: '#1b1626', w: '#e8ecef', n: '#22284a', r: '#e33b2e', p: '#8ab8e6', o: '#2f5a3a' });
   TRSPR.doctor = make('short', 'specs', 'coat', { h: '#9aa0a8', w: '#f4f6f8', r: '#e33b2e', p: '#3a3d4a' });
   TRSPR.gf = make('long', 'plain', 'tee', { h: '#e36b9a', c: '#8a5cf0', p: '#2a2a33' }, true); // девушка Серёжи — пока без фото
+  // шишь (находка из магазина)
+  TRSPR.bud = makeSprite([
+    '....g....', '...gLg.O.', '..gGgLgg.', '.OgLgGgO.', '.gGgOgLg.', 'gLgGgLgGg',
+    '.gOgLgOg.', '.GgGgGgG.', '..GgOgG..', '...GgG...', '....b....', '....b....',
+  ], { g: '#6cc04a', G: '#3f8a2e', O: '#e8913c', b: '#6b4428', L: '#9be07a' });
   // кот из подъезда (рыжий, сбоку)
   TRSPR.cat = makeSprite(['.o...o...', '.oo.oo...', '.okook...', 'ooooooooo', '.oooooooo', '.o.o..o.o'], { o: '#ff9a3c', k: '#1b1626' });
 })();
