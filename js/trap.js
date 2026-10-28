@@ -403,8 +403,12 @@ const Trap = (() => {
     polina: { name: 'Полина', color: '#c9a0ff', text: 'Пришла Полина, девушка Ромы' },
     vika: { name: 'Вика', color: '#ff9a3c', text: 'Пришла Вика, девушка Дамира — обещает приготовить ужин' },
     gf: { name: 'Альтушка Серёжи', color: '#9fd0f0', text: 'Пришла альтушка Серёжи' },
+    doctor: { name: 'Врач', color: '#ffffff', text: '' },
     savely: { name: 'Савелий', color: '#d8322a', text: 'Савелий из Тольятти заехал на своей Гранте' },
   };
+  const DOCTOR_FREE_EVERY = 10;    // по ОМС — бесплатно раз в 10 дней
+  const DOCTOR_PRICE = 500;        // чаще — платно
+  const DOCTOR_HEAL = 30;          // сколько здоровья даёт врач каждому, кто дома
   const GF_DAY = 10;               // на 10-й день у Серёжи появляется девушка
   const PARTY_DAY = 10;            // тусовку предлагают не раньше 10-го дня…
   const PARTY_GAP = 5;             // …и не чаще, чем раз в 5 дней
@@ -484,7 +488,7 @@ const Trap = (() => {
   function snapshot() {
     const g = game;
     return {
-      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, lastRap: g.lastRap || 0, flood: !!g.flood, poops: g.poops, log: g.log,
+      v: 1, ts: Date.now(), day: g.day, res: g.res, gf: g.gf, lastParty: g.lastParty || 0, lastRap: g.lastRap || 0, lastDoctor: g.lastDoctor || 0, flood: !!g.flood, poops: g.poops, log: g.log,
       people: g.people.map(p => ({
         id: p.id, hunger: p.hunger, health: p.health, happy: p.happy, crave: p.crave, alive: p.alive, away: p.away,
         skill: p.skill, task: p.task === 'rap' ? (p.taskBefore || 'work') : p.task, plan: p.plan, x: p.x, y: p.y, ill: p.ill, broken: p.broken || 0,
@@ -511,7 +515,7 @@ const Trap = (() => {
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
-      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, flood: false,
+      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, lastDoctor: 0, flood: false, doctorToday: false,
     };
     simPaused = false;
   }
@@ -528,7 +532,8 @@ const Trap = (() => {
     g.day = d.day; g.res = Object.assign({ meds: 0 }, d.res); g.gf = !!d.gf; g.flood = !!d.flood;
     // старые сохранения: была одна тусовка на 15-й день
     g.lastParty = d.lastParty || (d.partyOffered ? d.day : 0);
-    g.lastRap = d.lastRap || 0; g.poops = d.poops || []; g.log = d.log || [];
+    g.lastRap = d.lastRap || 0;
+    g.lastDoctor = d.lastDoctor || 0; g.poops = d.poops || []; g.log = d.log || [];
     for (const sp of d.people) {
       const p = byId(sp.id);
       if (p) Object.assign(p, sp);
@@ -731,7 +736,7 @@ const Trap = (() => {
       };
     }
     if (k === 'police') {
-      const fine = priceOf(700);
+      const fine = priceOf(230);
       return {
         title: '🚓 Соседи вызвали полицию',
         text: 'Ночью было слишком шумно. Участковый грозит штрафом.',
@@ -783,6 +788,13 @@ const Trap = (() => {
     g.flagsToday = g.flags || {};
     g.flags = {};
     g.shopCart = cart;
+    // врач: бесплатно по ОМС, если с прошлого бесплатного вызова прошло 10 дней, иначе платно
+    g.doctorAt = null;
+    if (g.doctorToday) {
+      g.doctorToday = false;
+      if (doctorFree()) { g.lastDoctor = g.day; g.doctorAt = 0.2; log('Вызвали врача по ОМС — бесплатно'); }
+      else if (g.res.money >= DOCTOR_PRICE) { g.res.money -= DOCTOR_PRICE; g.doctorAt = 0.2; log('Вызвали платного врача: −' + DOCTOR_PRICE + '₽'); }
+    }
     const rappers = g.flagsToday.rap ? present().filter(p => p.task === 'rap' && !busy(p)) : [];
     const ticket = g.flagsToday.rapFree ? 0 : RAP_PRICE;
     if (rappers.length && ticket) { g.res.money -= ticket * rappers.length; log('Билеты на «Реп над Волгой»: −' + ticket * rappers.length + '₽'); }
@@ -851,6 +863,7 @@ const Trap = (() => {
     if (g.partyAt && prev < g.partyAt && ph >= g.partyAt) startParty();
     if (g.gatherAt && prev < g.gatherAt && ph >= g.gatherAt) gather();
     if (g.dinnerAt && prev < g.dinnerAt && ph >= g.dinnerAt) dinner();
+    if (g.doctorAt && prev < g.doctorAt && ph >= g.doctorAt) doctorComes();
 
     for (const p of present()) {
       // расписание
@@ -895,7 +908,7 @@ const Trap = (() => {
       if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 70 * dd);
       if (at && p.act === 'смотрит ТВ') p.happy = cl(p.happy + 25 * dd);
       if (at && p.act === 'дота') p.happy = cl(p.happy + 90 * dd);
-      if (at && p.act === 'качается') { p.health = cl(p.health + 18 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
+      if (at && p.act === 'качается') { p.health = cl(p.health + 36 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
       if (at && p.act === 'монтаж' && !p.flags.gig) p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
       if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙП'); }
@@ -914,11 +927,12 @@ const Trap = (() => {
       if (!gu.leaving && ph >= gu.until) { gu.leaving = true; routeTo(gu, POI.door); }
       if (gu.leaving) { if (!gu.path.length) gu.gone = true; continue; }
       // девушки держатся рядом со своими парнями; остальные — у телевизора (или все вместе на диване)
+      if (gu.cookUntil && ph >= gu.cookUntil) vikaDinner(gu);
       gu.reT -= dt;
       if (gu.reT <= 0 && !gu.watching) {
         gu.reT = 1.5;
         const host = HOSTS[gu.id] && byId(HOSTS[gu.id]);
-        const spot = host && host.alive && !host.away && !host.hidden ? { x: host.x + 7, y: host.y + 1 } : gu.spot;
+        const spot = gu.cookUntil ? POI.stove : host && host.alive && !host.away && !host.hidden ? { x: host.x + 7, y: host.y + 1 } : gu.spot;
         if (Math.hypot(spot.x - gu.x, spot.y - gu.y) > 10 && !gu.path.length) routeTo(gu, spot);
       }
     }
@@ -967,7 +981,7 @@ const Trap = (() => {
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
-      if (p.flags.gig) { pay *= 2; log('💰 ' + p.name + ' сделал халтурку — двойная оплата'); }
+      if (p.flags.gig) { pay *= 2; log('💰 ' + p.name + ' сделал халтурку — оплата ×2' + (p.flags.energy ? ', с энергетиком ×4' : '')); }
       if (p.happy < moodBar()) { pay = Math.round(pay * 0.6); log('Заказчику не понравился монтаж ' + (p.id === 'serezha' ? 'Серёжи' : p.id === 'damir' ? 'Дамира' : 'Ромы') + ' — без настроения работа хуже (−40%)'); }
       if (g.flagsToday.latePay) pay = Math.round(pay / 2);
       if (p.ill) { pay = Math.round(pay * ILLS[p.ill.type].pay); log(p.name + ' работал больным — заплатили меньше'); }
@@ -1033,17 +1047,52 @@ const Trap = (() => {
       else parts.push('курил свои');
       log('Савелий заехал: ' + parts.join(', '));
     }
-    if (id === 'vika') { const d = byId('damir'); d.happy = cl(d.happy + 30); g.res.food += 2; all.forEach(p => { p.hunger = cl(p.hunger - 15); }); log('Вика приготовила ужин на всех: +2 еды, все сыты'); }
+    if (id === 'vika') {
+      const d = byId('damir'); d.happy = cl(d.happy + 30);
+      // сначала идёт к плите, ужин — через часть дня (но до отбоя)
+      const gu = g.guests[g.guests.length - 1];
+      gu.cookUntil = Math.min(0.8, g.dayT / DAY + 0.12);
+      gu.until = Math.max(gu.until, gu.cookUntil + 0.05);
+      routeTo(gu, POI.stove);
+      say(gu, 'ГОТОВЛЮ!');
+      log('Вика пришла к Дамиру и встала к плите');
+    }
     if (id === 'gf') { const s = byId('serezha'); s.happy = cl(s.happy + 30); if (g.res.food > 0) g.res.food--; log('Альтушка Серёжи зашла в гости: Серёже хорошо'); }
     Sound.play('checkpoint');
   }
 
   // ужин от повара: всем, кто дома, −25 голода (у Ромы сытнее — −35)
   function dinner() {
-    const g = game, eaters = present().filter(p => !p.hidden);
-    for (const p of eaters) { p.hunger = cl(p.hunger - g.dinnerFull); say(p, 'УЖИН!'); }
-    if (eaters.length) log('🍲 ' + g.dinnerBy.join(' и ') + ' ' + (g.dinnerBy.length > 1 ? 'приготовили' : 'приготовил') + ' ужин: всем −' + g.dinnerFull + ' голода');
+    const g = game;
+    serveDinner(g.dinnerFull, g.dinnerBy.join(' и ') + ' ' + (g.dinnerBy.length > 1 ? 'приготовили' : 'приготовил') + ' ужин');
+  }
+  function serveDinner(full, who) {
+    const eaters = present().filter(p => !p.hidden);
+    for (const p of eaters) { p.hunger = cl(p.hunger - full); say(p, 'УЖИН!'); }
+    if (eaters.length) log('🍲 ' + who + ': всем −' + full + ' голода');
     Sound.play('coin');
+  }
+  const doctorFree = () => !game.lastDoctor || game.day - game.lastDoctor >= DOCTOR_FREE_EVERY;
+  // врач приходит, осматривает всех, кто дома: здоровье, а больным — болезнь на день короче
+  function doctorComes() {
+    const g = game;
+    const gu = addGuest('doctor', Math.min(0.85, g.dayT / DAY + 0.12));
+    say(gu, 'ОТКРЫВАЙТЕ!');
+    for (const p of present()) {
+      p.health = cl(p.health + DOCTOR_HEAL);
+      say(p, '+ЗДОРОВЬЕ');
+      if (p.ill) { p.ill.days--; if (p.ill.days <= 0) { p.ill = null; log(p.name + ' вылечился у врача'); } }
+    }
+    log('🩺 Врач осмотрел всех: +' + DOCTOR_HEAL + ' здоровья, болезни короче');
+    Sound.play('checkpoint');
+  }
+
+  // Вика готовит у плиты, а через часть дня зовёт всех ужинать и оставляет порцию в холодильнике
+  function vikaDinner(gu) {
+    gu.cookUntil = 0;
+    serveDinner(30, 'Вика приготовила ужин на всех');
+    game.res.food++;
+    log('Вика оставила порцию в холодильнике: +1 еда');
   }
 
   // все, кто дома, и гости собираются на диване и ковре у телевизора Серёжи
@@ -1330,6 +1379,10 @@ const Trap = (() => {
       wrap.appendChild(c);
     }
     const r = g.res;
+    const docBtn = $('tr-doctor'), free = doctorFree(), left = DOCTOR_FREE_EVERY - (g.day - g.lastDoctor);
+    docBtn.classList.toggle('on', !!g.doctorToday);
+    docBtn.disabled = !g.doctorToday && !free && g.res.money < DOCTOR_PRICE;
+    docBtn.innerHTML = (g.doctorToday ? '✔ ' : '') + '🩺 ВРАЧ НА ДОМ · ' + (free ? 'БЕСПЛАТНО ПО ОМС' : DOCTOR_PRICE + '₽ <small>(по ОМС через ' + left + ' дн.)</small>');
     const toRent = RENT_EVERY - g.day % RENT_EVERY;
     $('tr-stock').textContent = 'Запасы: еда ' + r.food + ' · сигареты ' + r.cigs + ' · ' + r.money + '₽ · пиво ' + r.beer + ' · энергетики ' + r.energy + ' · лекарства ' + r.meds +
       ' · аренда ' + (toRent === RENT_EVERY ? 'через неделю' : 'через ' + toRent + ' дн.') + ' (' + rentAt(g.day + toRent) + '₽)';
@@ -1360,7 +1413,9 @@ const Trap = (() => {
     $('tr-shop-list').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { cart[b.dataset.m] = Math.max(0, cart[b.dataset.m] - 1); Sound.play('click'); renderShop(); });
   }
   // билеты на концерт оплачиваются в начале дня — в магазине на них уже не тратим
-  function rapCost() { return game.flags.rap ? present().filter(p => p.task === 'rap').length * rapPrice() : 0; }
+  function rapCost() {
+    return (game.flags.rap ? present().filter(p => p.task === 'rap').length * rapPrice() : 0) + (game.doctorToday && !doctorFree() ? DOCTOR_PRICE : 0);
+  }
   function buy() {
     const spent = SHOP.reduce((a, it) => a + cart[it.id] * priceOf(it.price), 0);
     game.res.money -= spent;
@@ -1429,7 +1484,8 @@ const Trap = (() => {
         row('ГОТОВИТЬ', up('ужин всем — сытость', 1) + ' без трат еды ' + up('утренняя порция сытнее') + ' ' + up('настроение всем') + '<br><small>повар в этот день не монтирует; у Ромы ужин сытнее</small>') +
         row('ОТДЫХ / ДОТА', up('настроение', 1) + '<br><small>Серёже дота поднимает настроение сильнее</small>') +
         row('РЕП', 'только в день концерта «Реп над Волгой» (300₽, а иногда друзья зовут бесплатно): жилец уезжает на весь день и не работает. ' + up('сытость') + ' ' + up('курево', 1) + ' ' + up('настроение на максимум', 1)) +
-        row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>',
+        row('СПОРТ (Рома)', up('здоровье', 1) + ' ' + up('настроение') + ' ' + dn('сытость')) + '</table>' +
+        '<p><b>🩺 Врач на дом</b> — кнопка в утреннем окне: по ОМС бесплатно раз в 10 дней, чаще — 500₽. Всем, кто дома, ' + up('здоровье', 1) + ', больным болезнь короче.</p>',
     },
     {
       title: 'ГОСТИ И КОТ',
@@ -1437,7 +1493,7 @@ const Trap = (() => {
         row(face('anya') + 'АНЯ', up('500₽ — заказ на съёмку') + ' ' + dn('1 еда')) +
         row(face('sasha') + face('sonya') + 'САША И СОНЯ', up('2 еды — чипсы') + ' ' + up('настроение всем')) +
         row(face('polina') + 'ПОЛИНА', up('настроение Роме', 1) + ' ' + dn('1 еда') + ' ' + dn('1 сигарета') + '<br><small>иногда наоборот приносит еду и сигареты</small>') +
-        row(face('vika') + 'ВИКА', up('2 еды') + ' ' + up('сытость всем') + ' ' + up('настроение Дамиру', 1)) +
+        row(face('vika') + 'ВИКА', 'встаёт к плите и готовит ужин: ' + up('сытость всем', 1) + ' ' + up('1 еда') + ' ' + up('настроение Дамиру', 1)) +
         row(face('savely') + 'САВЕЛИЙ', 'то привезёт ' + up('2 энергетика') + ', то выпьет ' + dn('1 энергетик') + '<br><small>сигарету иногда стреляет, иногда курит свои</small>') +
         row(face('gf') + 'АЛЬТУШКА СЕРЁЖИ', up('настроение Серёже', 1) + ' ' + dn('1 еда') + '<br><small>появится, если продержитесь до 10-го дня</small>') +
         row('🐈 КОТ ИЗ ПОДЪЕЗДА', 'может нагадить. Каждая кучка ' + dn('настроение всем') + '. <b>Нажми на кучку</b>, чтобы убрать') +
@@ -1449,7 +1505,7 @@ const Trap = (() => {
         row('ПРОСТУДА · 3 ДН.', dn('здоровье каждый день') + ' ' + dn('половина денег за монтаж') + '<br><small>может заразить соседей</small>') +
         row('ОТРАВЛЕНИЕ · 2 ДН.', dn('здоровье каждый день', 1) + ' ' + dn('половина денег за монтаж')) +
         row('ГРИПП · 4 ДН.', dn('здоровье каждый день') + ' ' + dn('не может работать', 1) + '<br><small>заразный — легко передаётся тем, кто дома</small>') + '</table>' +
-        '<p><b>Как лечить:</b> 💊 лекарства (в магазине) сокращают болезнь на 2 дня. Задание <b>«Отдых»</b> больному — выздоровление на день быстрее.</p>',
+        '<p><b>Как лечить:</b> 💊 лекарства (в магазине) сокращают болезнь на 2 дня. Задание <b>«Отдых»</b> больному — выздоровление на день быстрее. 🩺 <b>Врач на дом</b> лечит всех сразу.</p>',
     },
     {
       title: 'ЧЕМ ДАЛЬШЕ — ТЕМ ТРУДНЕЕ',
@@ -1553,6 +1609,7 @@ const Trap = (() => {
     $('tr-tut-skip').onclick = () => { Sound.play('click'); closeTutorial(); };
     $('tr-again').onclick = () => { overlay('tr-over', false); newGame(); };
     $('tr-go').onclick = startDayClicked;
+    $('tr-doctor').onclick = () => { game.doctorToday = !game.doctorToday; Sound.play('click'); renderPlan(); };
     $('tr-buy').onclick = buy;
     $('tr-knock-yes').onclick = () => answerKnock(true);
     $('tr-knock-no').onclick = () => answerKnock(false);

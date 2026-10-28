@@ -19,6 +19,7 @@ const TRSPR = {};
   const FACE = {
     plain: ['.ssesess.', '.sssssss.', '..sssss..'],
     glasses: ['.kekskek.', '.sssmsss.', '..sssss..'],   // очки и септум (Рома)
+    specs: ['.kekskek.', '.sssssss.', '..sssss..'],     // очки (врач)
     ring: ['.ssesess.', '.sssmsss.', '..sssss..'],      // септум (Дамир)
     phones: ['WssesessW', 'WsssssssW', '..sssss..'],    // наушники (Серёжа)
     aviators: ['.kkkskkk.', '.sssssss.', '..sssss..'], // авиаторы (Савелий)
@@ -33,6 +34,7 @@ const TRSPR = {};
     longsleeve: ['.ccccccc.', 'ccccccccc', 'scccccccs', '.ppppppp.', '.ss...ss.', '.oo...oo.'],
     // клетчатая рубашка нараспашку поверх тёмно-синей футболки с красным логотипом (Савелий)
     flannel: ['.cwnnnwc.', 'cwcnrncwc', 'scwnnnwcs', '.ppppppp.', '.pp...pp.', '.oo...oo.'],
+    coat: ['.wwwwwww.', 'wwwwrwwww', 'swwrrrwws', '.ppppppp.', '.pp...pp.', '.oo...oo.'],  // белый халат с красным крестом (врач)
     choker: ['.kkkkkkk.', 'ccckccccc', 'scccccccs', '.ppppppp.', '.pp...pp.', '.oo...oo.'],
   };
   // длинные волосы спадают по бокам лица
@@ -74,6 +76,7 @@ const TRSPR = {};
   TRSPR.sonya = make('cap', 'plain', 'longsleeve', { h: '#2a1f22', q: '#c9a03a', Q: '#946f1c', c: '#e33b2e', p: '#7b8496', o: '#c9a26b' });
   // Савелий из «Тольяттинской суеты»: красная кепка, авиаторы, клетчатая рубашка, голубые джинсы, чёрно-зелёные кеды
   TRSPR.savely = make('cap', 'aviators', 'flannel', { h: '#2a1f1a', q: '#d8322a', Q: '#8a1c16', c: '#1b1626', w: '#e8ecef', n: '#22284a', r: '#e33b2e', p: '#8ab8e6', o: '#2f5a3a' });
+  TRSPR.doctor = make('short', 'specs', 'coat', { h: '#9aa0a8', w: '#f4f6f8', r: '#e33b2e', p: '#3a3d4a' });
   TRSPR.gf = make('long', 'plain', 'tee', { h: '#e36b9a', c: '#8a5cf0', p: '#2a2a33' }, true); // девушка Серёжи — пока без фото
   // кот из подъезда (рыжий, сбоку)
   TRSPR.cat = makeSprite(['.o...o...', '.oo.oo...', '.okook...', 'ooooooooo', '.oooooooo', '.o.o..o.o'], { o: '#ff9a3c', k: '#1b1626' });

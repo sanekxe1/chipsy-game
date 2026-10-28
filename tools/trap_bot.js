@@ -5,10 +5,10 @@ window.TrapBot = (() => {
   const BASE = { food: 150, cigs: 220, beer: 120, energy: 110, meds: 230 };
   // привычки игрока; good — внимательный, avg — обычный. TrapBot.P можно менять из консоли
   const P = {
-    good: { cook: true, eat: 50, smoke: 55, beer: 45, rest: 45, lowF: 2, lowC: 2, tf: 3, tc: 3, energy: 6, meds: true, rentSave: true, rap: true, polina: true, poop: 3, phoneBuy: 2500, laptop: 1800, fine: 1500, partyHp: 65, shopper: 'serezha' },
+    good: { docFree: 75, docPaid: 35, cook: true, eat: 50, smoke: 55, beer: 45, rest: 45, lowF: 2, lowC: 2, tf: 3, tc: 3, energy: 6, meds: true, rentSave: true, rap: true, polina: true, poop: 3, phoneBuy: 2500, laptop: 1800, fine: 1500, partyHp: 65, shopper: 'serezha' },
     // новичок: раздаёт всем всё подряд, энергетики не покупает, кучки убирает редко
     casual: { eat: 25, smoke: 30, beer: 50, rest: 25, lowF: 1, lowC: 1, tf: 2, tc: 2, energy: 0, meds: false, rentSave: false, rap: false, polina: false, poop: 40, phoneBuy: 1500, laptop: 1500, fine: 1000, partyHp: 0, shopper: 'serezha' },
-    avg: { eat: 40, smoke: 50, beer: 35, rest: 25, lowF: 1, lowC: 1, tf: 2, tc: 2, energy: 0, meds: false, rentSave: false, rap: false, polina: false, poop: 25, phoneBuy: 1e9, laptop: 2500, fine: 3000, partyHp: 40, shopper: 'serezha' },
+    avg: { docFree: 50, docPaid: 0, eat: 40, smoke: 50, beer: 35, rest: 25, lowF: 1, lowC: 1, tf: 2, tc: 2, energy: 0, meds: false, rentSave: false, rap: false, polina: false, poop: 25, phoneBuy: 1e9, laptop: 2500, fine: 3000, partyHp: 40, shopper: 'serezha' },
   };
 
   function pickChoice(g, ev, skill) {
@@ -61,6 +61,10 @@ window.TrapBot = (() => {
       const c = ps.filter(p => p.task === 'work' && !p.flags.gig && !p.flags.search && !p.flags.repair).sort((a, b) => (a.id === 'roma' ? -1 : 0) - (b.id === 'roma' ? -1 : 0))[0];
       if (c) c.task = 'cook';
     }
+    // врач: бесплатный по ОМС — когда кому-то нехорошо, платный — только если совсем плохо
+    const minHp = Math.min(...ps.map(p => p.health));
+    const free = !g.lastDoctor || g.day - g.lastDoctor >= 10;
+    if ((free && minHp < (o.docFree || 0)) || (!free && minHp < (o.docPaid || 0) && g.res.money > 1500)) g.doctorToday = true;
     // раздача: кому нужнее
     const give = (k, want) => {
       const list = ps.filter(want).sort((a, b) => (k === 'food' ? b.hunger - a.hunger : k === 'cigs' ? b.crave - a.crave : a.happy - b.happy));

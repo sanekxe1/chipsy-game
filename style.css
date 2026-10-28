@@ -395,3 +395,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .news-body ul { margin: 0; padding-left: 14px; }
 .news-body li { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; font-size: 12px; line-height: 1.4; margin-bottom: 4px; color: #f4ecff; }
 .news-body li b { color: #ffe08a; }
+
+/* «Трэп хата»: вызов врача в утреннем окне */
+.tr-doctor { margin: 2px auto 4px; font-size: 8px; }
+.tr-doctor.on { background: #7dff8a; }
+.tr-doctor small { font-size: 7px; opacity: 0.8; }
