@@ -3,7 +3,7 @@
 // игрок рулит влево-вправо, обгоняет попутных и уворачивается от встречных.
 // Задел боком — царапина, игра идёт дальше; врезался — авария, конец.
 // Помощники: табличка «ТОЛЬЯТТИ» (−20% скорости на 7 с), дальний свет (центр свободен 3 с),
-// звонок Леси (5 с можно ехать по обочине). Помехи: ямы, дождь, ночь.
+// звонок Леси (5 с можно ехать по обочине), энергетик (щит на 5 с: аварии не страшны). Помехи: ямы, дождь, ночь.
 
 const Toly = (() => {
   const H = 180;
@@ -15,6 +15,10 @@ const Toly = (() => {
   const CITY_TIME = 7, CITY_SLOW = 0.8;
   const FLASH_TIME = 4, FLASH_CD = 10;
   const CALL_TIME = 7;
+  const SHIELD_TIME = 5;        // энергетик: столько секунд аварии не фатальны
+  const OPP_SLOW = 0.7;         // встречка едет на 30% медленнее табличных скоростей
+  let guard = true;              // проверка «стенок» при появлении машин (для сравнения ботом можно выключить)
+  const SIDE_GAP = 26;          // машины в соседних полосах не должны оказываться бок о бок ближе этого (по вертикали)
   const HOLE_PENALTY = 50;
   const CYCLE = 80;             // секунд на день → вечер → ночь → утро
   const TRAFFIC = [             // вид, вес, скорость попутной/встречной (px/с)
@@ -30,7 +34,7 @@ const Toly = (() => {
   let running = false, paused = false, raf = 0, last = 0;
   let t, dist, speed, slow, coins, scrapes, penalty, roadX, player, cars, coinsList, parts, texts, deco, holes, pickups;
   let nextCar, nextCoin, nextDeco, nextSign, nextHole, nextPhone, crashed, crashT, shakeT, banner, best, countdown, scrapeCD;
-  let raceT, cityT, cityMult, flashT, flashCD, callT, rain, rainA, rainTimer, drops, lastFlashUI;
+  let raceT, cityT, cityMult, flashT, flashCD, callT, rain, rainA, rainTimer, drops, lastFlashUI, shieldT, nextEnergy;
   const input = { left: false, right: false };
   let onOver = null, onFlashUI = null;
 
@@ -49,9 +53,10 @@ const Toly = (() => {
   };
 
   // темнота 0..1 по кругу: день → вечер → ночь → утро
-  const DARK = [[0, 0], [0.35, 0], [0.45, 0.55], [0.55, 1], [0.8, 1], [0.9, 0.3], [1, 0]];
-  function darkness() {
-    const ph = (t / CYCLE) % 1;
+  // ночь вдвое короче прежней: темнеет на ~26 с из 80, полная тьма ~10 с
+  const DARK = [[0, 0], [0.675, 0], [0.725, 0.55], [0.775, 1], [0.9, 1], [0.95, 0.3], [1, 0]];
+  function darkness(at) {
+    const ph = ((at === undefined ? t : at) / CYCLE) % 1;
     let i = 0;
     while (DARK[i + 1][0] < ph) i++;
     const [p0, d0] = DARK[i], [p1, d1] = DARK[i + 1];
@@ -81,7 +86,7 @@ const Toly = (() => {
     cars = []; coinsList = []; parts = []; texts = []; deco = []; holes = []; pickups = []; drops = [];
     nextCar = 120; nextCoin = 60; nextDeco = 0; nextSign = 2600; nextHole = 900; nextPhone = 2200;
     crashed = false; crashT = 0; shakeT = 0; scrapeCD = 0;
-    raceT = 0; cityT = 0; cityMult = 1; flashT = 0; flashCD = FLASH_CD; callT = 0;
+    raceT = 0; cityT = 0; cityMult = 1; flashT = 0; flashCD = FLASH_CD; callT = 0; shieldT = 0; nextEnergy = rnd(1800, 2600);
     rain = false; rainA = 0; rainTimer = rnd(25, 40);
     lastFlashUI = null;
     countdown = 3.4;
@@ -174,18 +179,43 @@ const Toly = (() => {
     if (busy.size >= 4) return;
     // при дальнем свете две центральные полосы (2 и 3) не занимаем
     const opp = Math.random() < 0.35 + 0.15 * d;
-    const lanes = (opp ? OPP_LANES : SAME_LANES).filter(l => !busy.has(l) && !(flashT > 0 && (l === 2 || l === 3)));
-    if (!lanes.length) return;
-    const lane = lanes[Math.floor(Math.random() * lanes.length)];
     const variants = TSPR.cars[def.kind];
     const img = variants[Math.floor(Math.random() * variants.length)][opp ? 1 : 0];
     const range = opp ? def.opp : def.same;
-    cars.push({
-      kind: def.kind, img, opp, lane,
-      x: laneX(lane) - (img.width - 2) / 2, y: -img.height - 4,
+    const car = {
+      kind: def.kind, img, opp, lane: 0,
+      x: 0, y: -img.height - 4,
       w: img.width - 2, h: img.height - 2,
-      v: rnd(range[0], range[1]), wob: Math.random() * 6,
-    });
+      v: rnd(range[0], range[1]) * (opp ? OPP_SLOW : 1), wob: Math.random() * 6,
+    };
+    // полоса подходит, если новая машина ни с кем из соседних полос не окажется бок о бок, пока они на экране
+    const lanes = (opp ? OPP_LANES : SAME_LANES).filter(l => !busy.has(l) && !(flashT > 0 && (l === 2 || l === 3)) && !(guard && sideBySide(car, l)));
+    if (!lanes.length) return;
+    car.lane = lanes[Math.floor(Math.random() * lanes.length)];
+    car.x = laneX(car.lane) - car.w / 2;
+    cars.push(car);
+  }
+
+  // скорость машины вниз по экрану (px/с) при текущей скорости игрока
+  const carVy = c => (c.opp ? speed + c.v : speed - c.v * slow * cityMult);
+  // Окажутся ли машина a (в полосе lane) и любая машина в соседней полосе рядом по вертикали в ближайшие секунды.
+  // Движение прямолинейное: разница скоростей двух машин от скорости игрока не зависит, так что прогноз честный.
+  function sideBySide(a, lane, skip) {
+    const va = carVy(a);
+    for (const c of cars) {
+      if (c === a || c === skip || Math.abs(c.lane - lane) !== 1) continue;
+      const vc = carVy(c);
+      for (let tau = 0; tau <= 6; tau += 0.1) {
+        const ya = a.y + va * tau, yc = c.y + vc * tau;
+        if (ya > H + 10 && yc > H + 10) break;              // обе уехали вниз за экран
+        if (ya < -140 && yc < -140) break;                  // обе отстали далеко вверху
+        if (ya > H || yc > H || ya + a.h < -30 || yc + c.h < -30) continue;
+        // зазор между ними по вертикали
+        const gap = Math.max(yc - (ya + a.h), ya - (yc + c.h));
+        if (gap < SIDE_GAP) return true;
+      }
+    }
+    return false;
   }
 
   function spawnCoins() {
@@ -225,11 +255,15 @@ const Toly = (() => {
     }
 
     // погода: дождь начинается и заканчивается сам
+    // дождь вдвое короче прежнего и не совпадает с ночью: если стемнеет до его конца — ждём рассвета
     rainTimer -= dt;
     if (rainTimer <= 0) {
-      rain = !rain;
-      rainTimer = rain ? rnd(15, 22) : rnd(30, 55);
-      if (rain) banner = { text: 'ДОЖДЬ!', sub: 'Дорога скользкая', t: 1.6 };
+      if (rain) { rain = false; rainTimer = rnd(30, 55); }
+      else {
+        const len = rnd(7.5, 11);
+        if (darkness() > 0.05 || darkness(t + len) > 0.05) rainTimer = 3;
+        else { rain = true; rainTimer = len; banner = { text: 'ДОЖДЬ!', sub: 'Дорога скользкая', t: 1.6 }; }
+      }
     }
     rainA += ((rain ? 1 : 0) - rainA) * Math.min(1, dt * 0.8);
 
@@ -293,12 +327,14 @@ const Toly = (() => {
     for (const c of cars) {
       c.y += c.opp ? dy + c.v * dt : dy - c.v * dt * slow * cityMult;
       const tx = laneX(c.lane) - c.w / 2 + (c.kind === 'moto' ? Math.sin(t * 2 + c.wob) * 5 : 0);
-      c.x += (tx - c.x) * Math.min(1, dt * (c.kind === 'moto' ? 20 : 5));
+      if (c.knocked) { c.x += (c.x + c.w / 2 < player.x + 7 ? -1 : 1) * 160 * dt; continue; }
+      c.slide = Math.max(0, (c.slide || 0) - dt);
+      c.x += (tx - c.x) * Math.min(1, dt * (c.kind === 'moto' ? 20 : c.slide > 0 ? 9 : 5));
     }
     // в одной полосе машины не проезжают сквозь друг друга: догнавший тормозит
     for (const a of cars) {
       for (const b of cars) {
-        if (a === b || a.lane !== b.lane || a.opp !== b.opp) continue;
+        if (a === b || a.lane !== b.lane || a.opp !== b.opp || a.knocked || b.knocked) continue;
         const lead = a.opp ? (a.y > b.y ? a : b) : (a.y < b.y ? a : b);
         const fol = lead === a ? b : a;
         const gap = a.opp ? lead.y - (fol.y + fol.h) : fol.y - (lead.y + lead.h);
@@ -308,7 +344,7 @@ const Toly = (() => {
         }
       }
     }
-    cars = cars.filter(c => c.y < H + 80 && c.y > -200);
+    cars = cars.filter(c => c.y < H + 80 && c.y > -200 && c.x > roadX - 60 && c.x < roadX + ROAD_W + 60);
     nextCar -= dy;
     if (nextCar <= 0) {
       spawnCar();
@@ -326,6 +362,16 @@ const Toly = (() => {
       const lane = Math.floor(Math.random() * LANES);
       pickups.push({ kind: 'phone', x: laneX(lane) - 4, y: -14, w: 9, h: 12 });
       nextPhone = rnd(3000, 4800);
+    }
+    nextEnergy -= dy;
+    if (nextEnergy <= 0) {
+      const lane = Math.floor(Math.random() * LANES);
+      pickups.push({ kind: 'energy', x: laneX(lane) - 4, y: -14, w: 8, h: 12 });
+      nextEnergy = rnd(3200, 5200);
+    }
+    if (shieldT > 0) {
+      shieldT = Math.max(0, shieldT - dt);
+      if (shieldT === 0) texts.push({ x: player.x + 7, y: player.y - 8, text: 'ЩИТ КОНЧИЛСЯ', life: 1 });
     }
     for (const hl of holes) hl.y += dy;
     nextHole -= dy;
@@ -346,6 +392,13 @@ const Toly = (() => {
       for (const p of pickups) {
         if (!p.taken && hit(player, p)) {
           p.taken = true;
+          if (p.kind === 'energy') {
+            shieldT = SHIELD_TIME;
+            banner = { text: 'ЭНЕРГЕТИК!', sub: 'Щит: ' + SHIELD_TIME + ' секунд аварии не страшны', t: 1.6 };
+            Sound.play('boost');
+            haptic('medium');
+            continue;
+          }
           callT = CALL_TIME;
           banner = { text: 'ЗВОНИТ ЛЕСЯ!', sub: CALL_TIME + ' секунд можно ехать по обочине', t: 1.6 };
           Sound.play('ring');
@@ -375,14 +428,25 @@ const Toly = (() => {
     if (!crashed) {
       const returning = callT === 0 && (player.x < roadX + 3 || player.x > roadX + ROAD_W - 3 - player.w);
       for (const c of cars) {
-        if (!hit(player, c)) continue;
+        if (c.knocked || !hit(player, c)) continue;
         const ox = Math.min(player.x + player.w, c.x + c.w) - Math.max(player.x, c.x);
         if (ox <= 6 || returning) {
-          // задел боком — отталкиваемся и едем дальше
+          // задел боком — отталкиваемся и едем дальше, а машину сносит в соседнюю полосу
           const left = player.x + player.w / 2 < c.x + c.w / 2;
           player.x += left ? -(ox + 1) : ox + 1;
           player.vx = left ? -60 : 60;
           scrape(left ? player.x + player.w : player.x, Math.max(player.y, c.y) + 8, false);
+          shove(c, left ? 1 : -1);
+        } else if (shieldT > 0) {
+          // щит энергетика: машину отбрасывает в сторону, мы только притормаживаем
+          const left = player.x + player.w / 2 < c.x + c.w / 2;
+          if (!shove(c, left ? 1 : -1)) c.knocked = true;
+          slow = Math.min(slow, 0.75);
+          shakeT = 0.25;
+          texts.push({ x: player.x + 7, y: player.y - 8, text: 'ЩИТ!', life: 0.8 });
+          for (let i = 0; i < 10; i++) parts.push({ x: c.x + c.w / 2, y: c.y + c.h / 2, vx: rnd(-80, 80), vy: rnd(-80, 40), life: 0.5, color: i % 2 ? '#7dff8a' : '#ffffff', size: 2 });
+          Sound.play('thump');
+          haptic('medium');
         } else {
           crash();
           break;
@@ -402,6 +466,21 @@ const Toly = (() => {
     parts = parts.filter(q => q.life > 0);
     for (const tx of texts) { tx.y -= 20 * dt; tx.life -= dt; }
     texts = texts.filter(tx => tx.life > 0);
+  }
+
+  // машину, которую задели, уводит в соседнюю полосу своего направления (если там свободно)
+  function shove(c, dir) {
+    if (c.shoved > t) return true;
+    const group = c.opp ? OPP_LANES : SAME_LANES;
+    for (const lane of [c.lane + dir, c.lane - dir]) {
+      if (!group.includes(lane)) continue;
+      if (cars.some(o => o !== c && o.lane === lane && o.opp === c.opp && Math.abs(o.y - c.y) < Math.max(o.h, c.h) + 10)) continue;
+      c.lane = lane;
+      c.shoved = t + 0.8;
+      c.slide = 1;
+      return true;
+    }
+    return false;
   }
 
   function scrape(x, y, wall) {
@@ -574,6 +653,11 @@ const Toly = (() => {
       ctx.drawImage(TSPR.coin[f], Math.round(cn.x + f), Math.round(cn.y));
     }
     for (const p of pickups) {
+      if (p.kind === 'energy') {
+        if (Math.floor(t * 6) % 2) { ctx.fillStyle = '#7dff8a'; ctx.fillRect(Math.round(p.x - 3), Math.round(p.y + 4), 2, 2); ctx.fillRect(Math.round(p.x + 9), Math.round(p.y + 4), 2, 2); }
+        ctx.drawImage(SPR.energy, Math.round(p.x + 4 - SPR.energy.width / 2), Math.round(p.y + Math.sin(t * 6) * 1.5));
+        continue;
+      }
       if (Math.floor(t * 6) % 2) { ctx.fillStyle = '#ff8fb8'; ctx.fillRect(Math.round(p.x - 3), Math.round(p.y + 4), 2, 2); ctx.fillRect(Math.round(p.x + 10), Math.round(p.y + 4), 2, 2); }
       ctx.drawImage(TSPR.phone, Math.round(p.x), Math.round(p.y + Math.sin(t * 6) * 1.5));
     }
@@ -590,6 +674,11 @@ const Toly = (() => {
       ctx.restore();
     } else {
       ctx.drawImage(img, px, py);
+    }
+    // щит энергетика: зелёная рамка вокруг машины, в конце мигает
+    if (shieldT > 0 && (shieldT > 1.2 || Math.floor(t * 10) % 2)) {
+      ctx.strokeStyle = 'rgba(125,255,138,0.85)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(px + img.width / 2, py + img.height / 2, img.width / 2 + 5, img.height / 2 + 5, 0, 0, Math.PI * 2); ctx.stroke();
     }
 
     // ночь и дождь
@@ -643,6 +732,12 @@ const Toly = (() => {
       ctx.fillStyle = '#3d7be0'; ctx.fillRect(rx - 71, ey + 9, Math.round(40 * cityT / CITY_TIME), 2);
       ey += 16;
     }
+    if (shieldT > 0) {
+      text('ЩИТ', rx - 30, ey, 5, '#7dff8a', 'right');
+      ctx.fillStyle = '#1b1626'; ctx.fillRect(rx - 72, ey + 8, 42, 4);
+      ctx.fillStyle = '#7dff8a'; ctx.fillRect(rx - 71, ey + 9, Math.round(40 * shieldT / SHIELD_TIME), 2);
+      ey += 16;
+    }
     if (rain) text('ДОЖДЬ', rx - 30, ey, 5, '#9fd0f0', 'right');
     if (callT > 0) drawCall(lx, top + 34);
     if (countdown > 0) {
@@ -669,6 +764,13 @@ const Toly = (() => {
       sign: () => { nextSign = 0; },
       hole: () => { holes.push({ x: player.x + 1, y: player.y - 40, w: 12, h: 6 }); },
       ready: () => { flashCD = 0; },
+      energy: () => { pickups.push({ kind: 'energy', x: player.x + 3, y: player.y, w: 8, h: 12 }); },
+      // для бота-проверки тупиков (tools/toly_bot.js)
+      raw: () => ({ cars, player, speed, slow, cityMult, roadX, LANE, LANES, crashed, dist, shieldT, callT, t, rainA }),
+      step: dt => update(dt),
+      draw: () => render(),
+      sideBySide: (c, l) => sideBySide(c, l),
+      guard: on => { guard = on; },
       state: () => ({ t: Math.round(t), callT: +callT.toFixed(1), cityT: +cityT.toFixed(1), flashT: +flashT.toFixed(1), flashCD: Math.ceil(flashCD), rain, x: Math.round(player.x), road: [roadX, roadX + ROAD_W] }),
     },
     set onGameOver(fn) { onOver = fn; },
