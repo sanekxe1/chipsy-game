@@ -930,9 +930,9 @@ const Trap = (() => {
       if (p.happy <= 0) p.health = cl(p.health - 10 * dd);
       if (asleep && p.hunger < 80) p.health = cl(p.health + BAL.sleep * dd);
       const at = p.path.length === 0 && !p.hidden;
-      if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 70 * dd);
+      if (at && p.act === 'отдыхает') p.happy = cl(p.happy + 105 * dd);
       if (at && p.act === 'смотрит ТВ') p.happy = cl(p.happy + 25 * dd);
-      if (at && p.act === 'дота') p.happy = cl(p.happy + 90 * dd);
+      if (at && p.act === 'дота') p.happy = cl(p.happy + 135 * dd);
       if (at && p.act === 'качается') { p.health = cl(p.health + 36 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
       if (at && p.act === 'монтаж' && !p.flags.gig) p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
