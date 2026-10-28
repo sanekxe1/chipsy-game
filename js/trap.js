@@ -467,6 +467,7 @@ const Trap = (() => {
   const BUD_CHANCE = 0.12;           // шанс найти по дороге в магазин
   const BUD_FOOD = 6;                // сколько еды уходит на «пожрать» после
   const BUD_DAYS = 2;                // сколько дней тяга к куреву не растёт
+  const GUEST_BUD_CHANCE = 0.1;      // Саша (с Соней) или Савелий иногда приносят шишь в гости
   const PALE_CHANCE = 0.15;          // кто-то может «словить бледного»: сегодня работает вполсилы
   // к кому гость приходит и рядом с кем держится
   const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
@@ -665,7 +666,7 @@ const Trap = (() => {
     const short = Math.max(0, BUD_FOOD - g.res.food);
     return {
       title: '🌿 ШИШЬ',
-      text: '<img class="ev-pic" src="' + TRSPR.bud.toDataURL() + '" alt="">' + who + ' вчера нашёл по дороге шишь. Курят все вместе — или никто.<br>' +
+      text: '<img class="ev-pic" src="' + TRSPR.bud.toDataURL() + '" alt="">' + (who.includes(' ') ? who : who + ' вчера нашёл по дороге шишь') + '. Курят все вместе — или никто.<br>' +
         '<span class="ev-up">+20 здоровья</span> <span class="ev-up">+65 настроения</span> <span class="ev-up">курево на максимум ' + BUD_DAYS + ' дня</span><br>' +
         '<span class="ev-dn">потом пробьёт на хавчик: −' + BUD_FOOD + ' еды</span> <span class="ev-dn">кто-то может словить бледного</span>' +
         (short ? ' <span class="ev-dn">еды не хватит — всем ещё −' + 15 * short + ' сытости</span>' : ''),
@@ -964,7 +965,7 @@ const Trap = (() => {
           if (g.shopCart) { for (const k in g.shopCart) g.res[k] += g.shopCart[k]; g.shopCart = null; say(p, 'ПОКУПКИ!'); Sound.play('coin'); }
           // повезло: нашёл деньги по дороге
           if (Math.random() < 0.15) { g.res.money += 500; say(p, '+500₽!'); log('💵 ' + p.name + ' нашёл на улице 500₽'); }
-          if (!g.bud && Math.random() < BUD_CHANCE) { g.bud = p.name; say(p, 'НАШЁЛ ШИШЬ!'); log('🌿 ' + p.name + ' нашёл по дороге шишь'); }
+          if (!g.bud && Math.random() < BUD_CHANCE) { g.bud = p.name + ' вчера нашёл по дороге шишь'; say(p, 'НАШЁЛ ШИШЬ!'); log('🌿 ' + p.name + ' нашёл по дороге шишь'); }
         }
       }
 
@@ -1123,7 +1124,7 @@ const Trap = (() => {
     addGuest(id, Math.min(0.85, g.dayT / DAY + 0.2));
     const all = present();
     if (id === 'anya') { g.res.money += 500; if (g.res.food > 0) g.res.food--; log('Аня принесла заказ на съёмку: +500₽ (и съела порцию)'); }
-    if (id === 'sashasonya') { g.res.food += 2; all.forEach(p => { p.happy = cl(p.happy + 12); }); log('Саша и Соня принесли чипсы: +2 еды, всем веселее'); }
+    if (id === 'sashasonya') { g.res.food += 2; all.forEach(p => { p.happy = cl(p.happy + 12); }); log('Саша и Соня принесли чипсы: +2 еды, всем веселее'); guestBud('Саша'); }
     if (id === 'polina') {
       const r = byId('roma'); r.happy = cl(r.happy + 30);
       // чаще объедает, но иногда приходит с пакетом
@@ -1137,6 +1138,7 @@ const Trap = (() => {
       if (Math.random() < 0.5 && g.res.cigs > 0) { g.res.cigs--; parts.push('стрельнул сигарету'); }
       else parts.push('курил свои');
       log('Савелий заехал: ' + parts.join(', '));
+      guestBud('Савелий');
     }
     if (id === 'vika') {
       const d = byId('damir'); d.happy = cl(d.happy + 30);
@@ -1185,6 +1187,16 @@ const Trap = (() => {
     serveDinner(30, 'Вика приготовила ужин на всех');
     game.res.food++;
     log('Вика оставила порцию в холодильнике: +1 еда');
+  }
+
+  // гость иногда приносит шишь — решать, курить или нет, будут утром
+  function guestBud(name) {
+    const g = game;
+    if (g.bud || Math.random() >= GUEST_BUD_CHANCE) return;
+    g.bud = name + ' вчера принёс в гости шишь';
+    const gu = g.guests.find(x => x.id === (name === 'Саша' ? 'sashasonya' : 'savely'));
+    if (gu) say(gu, 'У МЕНЯ ШИШЬ!');
+    log('🌿 ' + name + ' принёс шишь');
   }
 
   // все, кто дома, и гости собираются на диване и ковре у телевизора Серёжи
