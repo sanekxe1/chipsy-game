@@ -405,3 +405,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
 /* картинка в утреннем событии «Трэп хаты» (шишь) */
 .tr-event .ev-pic { float: left; width: 36px; height: auto; image-rendering: pixelated; margin: 0 8px 4px 0; }
+
+/* «>>» перемотка в «Трэп хате»: включена — подсвечена */
+#tr-ffwd.on { background: #7dff8a; }

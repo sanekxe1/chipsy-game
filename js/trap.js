@@ -464,10 +464,10 @@ const Trap = (() => {
   // вейп тоже понемногу сильнее — но вдвое медленнее, чем растёт тяга: 30 → 37,5 к 61-му дню
   const vapeAmt = () => 30 * (1 + Math.min(0.25, (dayN() - 1) / 240));
   // «шишь» из магазина
-  const BUD_CHANCE = 0.12;           // шанс найти по дороге в магазин
+  const BUD_CHANCE = 0.24;           // шанс найти по дороге в магазин
   const BUD_FOOD = 6;                // сколько еды уходит на «пожрать» после
   const BUD_DAYS = 2;                // сколько дней тяга к куреву не растёт
-  const GUEST_BUD_CHANCE = 0.1;      // Саша (с Соней) или Савелий иногда приносят шишь в гости
+  const GUEST_BUD_CHANCE = { 'Саша': 0.1, 'Савелий': 0.2 }; // иногда приносят шишь в гости
   const PALE_CHANCE = 0.15;          // кто-то может «словить бледного»: сегодня работает вполсилы
   // к кому гость приходит и рядом с кем держится
   const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
@@ -477,6 +477,7 @@ const Trap = (() => {
   let game = null;                 // текущая партия
   let forceEvent = null;           // для отладки: какое событие выпадет следующим утром
   let speed = 1, simPaused = false, inUI = false;
+  let ffwd = false;                // «>>»: мотаем день вперёд до следующего момента, где нужен игрок
   // ---------------- Сохранение: телефон + облако Telegram ----------------
   // Облако (CloudStorage, Bot API 6.9+) привязано к аккаунту игрока: можно продолжить на другом устройстве.
   // Каждая запись помечена временем ts — при загрузке берём более свежую из двух копий.
@@ -1192,7 +1193,7 @@ const Trap = (() => {
   // гость иногда приносит шишь — решать, курить или нет, будут утром
   function guestBud(name) {
     const g = game;
-    if (g.bud || Math.random() >= GUEST_BUD_CHANCE) return;
+    if (g.bud || Math.random() >= GUEST_BUD_CHANCE[name]) return;
     g.bud = name + ' вчера принёс в гости шишь';
     const gu = g.guests.find(x => x.id === (name === 'Саша' ? 'sashasonya' : 'savely'));
     if (gu) say(gu, 'У МЕНЯ ШИШЬ!');
@@ -1405,13 +1406,30 @@ const Trap = (() => {
     }
   }
 
+  // перемотка: до 8 игровых секунд за кадр, пока не постучат, кот не нагадит, кто-то не умрёт или не наступит утро
+  function fastForward() {
+    const g = game, poops = g.poops.length, alive = g.people.filter(p => p.alive).length;
+    for (let i = 0; i < 240; i++) {
+      updateDay(1 / 30);
+      if (inUI || g !== game || g.phase !== 'day' || g.poops.length > poops || g.people.filter(p => p.alive).length < alive) { setFfwd(false); return; }
+    }
+  }
+  function setFfwd(on) {
+    ffwd = on;
+    $('tr-ffwd').classList.toggle('on', on);
+    if (on && simPaused) { simPaused = false; $('tr-pause').textContent = 'II'; Sound.startMusic('trap'); }
+  }
+
   function frame(ts) {
     if (!running) return;
     const dt = Math.min(0.05, (ts - last) / 1000 || 0);
     last = ts;
     if (Math.floor(t) !== Math.floor(t + dt)) fitHud();
     t += dt;
-    if (game && game.phase === 'day' && !simPaused && !inUI) updateDay(dt * speed);
+    if (game && game.phase === 'day' && !simPaused && !inUI) {
+      if (ffwd) fastForward();
+      else updateDay(dt * speed);
+    }
     render();
     raf = requestAnimationFrame(frame);
   }
@@ -1638,7 +1656,7 @@ const Trap = (() => {
         row(face('damir') + 'ДАМИР', 'курит реже всех, а когда совсем приспичит — иногда стреляет вейп у Серёжи. Иногда уезжает к родителям и возвращается с едой') +
         row(face('roma') + 'РОМА', 'готовит лучше всех, но теряет телефон и опаздывает на съёмки') + '</table>' +
         '<p>Смерть друга сильно бьёт по настроению остальных.</p>' +
-        '<p>Кнопки вверху: <b>×1 ×2 ×3</b> — скорость, <b>II</b> — пауза, <b>?</b> — это обучение.</p>',
+        '<p>Кнопки вверху: <b>×1 ×2 ×3</b> — скорость, <b>&gt;&gt;</b> — перемотать до следующего события (стук в дверь, кучка от кота, утро), <b>II</b> — пауза, <b>?</b> — это обучение.</p>',
     },
   ];
   let tutPage = 0, tutThenPlay = false;
@@ -1728,7 +1746,8 @@ const Trap = (() => {
     $('tr-knock-yes').onclick = () => answerKnock(true);
     $('tr-knock-no').onclick = () => answerKnock(false);
     $('tr-speed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 3 : 1; $('tr-speed').textContent = '×' + speed; Sound.play('click'); };
-    $('tr-pause').onclick = () => { simPaused = !simPaused; $('tr-pause').textContent = simPaused ? '▶' : 'II'; if (simPaused) Sound.stopMusic(); else if (game && game.phase === 'day') Sound.startMusic('trap'); };
+    $('tr-ffwd').onclick = () => { if (!game || game.phase !== 'day') return; setFfwd(!ffwd); Sound.play('click'); };
+    $('tr-pause').onclick = () => { if (ffwd) setFfwd(false); simPaused = !simPaused; $('tr-pause').textContent = simPaused ? '▶' : 'II'; if (simPaused) Sound.stopMusic(); else if (game && game.phase === 'day') Sound.startMusic('trap'); };
     canvas.addEventListener('pointerdown', e => {
       const r = canvas.getBoundingClientRect();
       clickAt((e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H);
