@@ -467,6 +467,7 @@ const Trap = (() => {
   const BUD_CHANCE = 0.12;           // шанс найти по дороге в магазин
   const BUD_FOOD = 6;                // сколько еды уходит на «пожрать» после
   const BUD_DAYS = 2;                // сколько дней тяга к куреву не растёт
+  const PALE_CHANCE = 0.15;          // кто-то может «словить бледного»: сегодня работает вполсилы
   // к кому гость приходит и рядом с кем держится
   const HOSTS = { polina: 'roma', vika: 'damir', gf: 'serezha' };
   // места на диване и ковре у телевизора Серёжи, где все собираются
@@ -666,7 +667,7 @@ const Trap = (() => {
       title: '🌿 ШИШЬ',
       text: '<img class="ev-pic" src="' + TRSPR.bud.toDataURL() + '" alt="">' + who + ' вчера нашёл по дороге шишь. Курят все вместе — или никто.<br>' +
         '<span class="ev-up">+20 здоровья</span> <span class="ev-up">+65 настроения</span> <span class="ev-up">курево на максимум ' + BUD_DAYS + ' дня</span><br>' +
-        '<span class="ev-dn">потом пробьёт на хавчик: −' + BUD_FOOD + ' еды</span>' +
+        '<span class="ev-dn">потом пробьёт на хавчик: −' + BUD_FOOD + ' еды</span> <span class="ev-dn">кто-то может словить бледного</span>' +
         (short ? ' <span class="ev-dn">еды не хватит — всем ещё −' + 15 * short + ' сытости</span>' : ''),
       choices: [
         { label: 'СКУРИТЬ ВСЕМ', fn: smokeBud },
@@ -686,6 +687,12 @@ const Trap = (() => {
     }
     g.highUntil = g.day + BUD_DAYS;
     log('🌿 Скурили шишь всей хатой: ' + (short ? 'съели всю еду (' + eaten + ') и всё равно голодные' : 'потом съели ' + eaten + ' еды'));
+    // иногда кого-то накрывает: весь день вполсилы
+    if (ps.length && Math.random() < PALE_CHANCE) {
+      const p = pick(ps);
+      p.flags.pale = true;
+      log('😵 ' + p.name + ' словил бледного — сегодня работает вполсилы');
+    }
   }
 
   // кто будет чинить потоп: лучше Дамир, иначе любой, кто дома
@@ -877,6 +884,7 @@ const Trap = (() => {
         if (p.ill.days <= 0) { p.ill = null; log(p.name + ' выпил лекарства и сразу выздоровел'); }
       }
       if (cooks.length) p.happy = cl(p.happy + 6);
+      if (p.flags.pale) say(p, 'МНЕ ПЛОХО…');
       buildSchedule(p);
     }
     // гости и кот на сегодня
@@ -1063,6 +1071,7 @@ const Trap = (() => {
       if (p.happy <= 5) { log(p.name + ' не смог работать — совсем нет настроения'); continue; }
       if (p.flags.energy) pay *= 2;
       if (p.flags.slept) pay = Math.round(pay / 2);
+      if (p.flags.pale) { pay = Math.round(pay / 2); log(p.name + ' после бледного смонтировал вполсилы — половина оплаты'); }
       if (p.flags.gig) { pay *= 2; log('💰 ' + p.name + ' сделал халтурку — оплата ×2' + (p.flags.energy ? ', с энергетиком ×4' : '')); }
       if (p.happy < moodBar()) { pay = Math.round(pay * 0.6); log('Заказчику не понравился монтаж ' + (p.id === 'serezha' ? 'Серёжи' : p.id === 'damir' ? 'Дамира' : 'Ромы') + ' — без настроения работа хуже (−40%)'); }
       if (g.flagsToday.latePay) pay = Math.round(pay / 2);
@@ -1461,6 +1470,7 @@ const Trap = (() => {
       if (p.broken) html += '<div class="tr-ill">💻 БЕЗ КОМПЬЮТЕРА ЕЩЁ ' + p.broken + ' ДН. — монтаж не принесёт денег</div>';
       if (p.flags.search) html += '<div class="tr-ill">🔍 ИЩЕТ ТЕЛЕФОН ВЕСЬ ДЕНЬ — других заданий нет</div>';
       else if (p.flags.repair) html += '<div class="tr-ill">🔧 ЧИНИТ ТРУБУ ВЕСЬ ДЕНЬ — других заданий нет</div>';
+      if (p.flags.pale) html += '<div class="tr-ill">😵 СЛОВИЛ БЛЕДНОГО — сегодня монтаж вполсилы</div>';
       else html += '<div class="tr-tasks">' + tasks.map(k => '<button data-t="' + k + '" class="tr-task' + (p.task === k ? ' on' : '') + '"' + (k === 'rap' && p.task !== 'rap' && rapFull ? ' disabled' : '') + '>' + (k === 'rest' && p.id === 'serezha' ? 'ДОТА' : k === 'rap' ? 'РЕП ' + (rapPrice() ? rapPrice() + '₽' : 'БЕСПЛАТНО') : TASKS[k]) + '</button>').join('') + '</div>';
       c.innerHTML = html;
       c.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { p.plan[b.dataset.k] = !p.plan[b.dataset.k]; Sound.play('click'); renderPlan(); });
