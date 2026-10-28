@@ -412,6 +412,7 @@ const Trap = (() => {
   const GF_DAY = 10;               // на 10-й день у Серёжи появляется девушка
   const PARTY_DAY = 10;            // тусовку предлагают не раньше 10-го дня…
   const PARTY_GAP = 5;             // …и не чаще, чем раз в 5 дней
+  const FUN_GAP = 4;               // между тусовкой и «Репом над Волгой» — минимум 4 дня, чтобы не шли подряд
 
   // ---------------- Сложность растёт с каждым днём ----------------
   // всё считается от номера дня, поэтому старые сохранения подхватывают её сами
@@ -651,7 +652,8 @@ const Trap = (() => {
     // пока не починили потоп — каждое утро напоминание (важнее тусовки и случайных событий)
     if (g.flood && !forceEvent) return floodEvent(false);
     // «Реп над Волгой»: не чаще раза в 6 дней; кто пойдёт — выбирается заданием «РЕП»
-    const rapReady = g.day >= 4 && g.day - (g.lastRap || 0) >= RAP_GAP;
+    const funReady = g.day - Math.max(g.lastRap || 0, g.lastParty || 0) >= FUN_GAP;
+    const rapReady = funReady && g.day >= 4 && g.day - (g.lastRap || 0) >= RAP_GAP;
     if (forceEvent === 'rap' || (!forceEvent && rapReady && Math.random() < 0.3)) {
       forceEvent = null;
       g.lastRap = g.day;
@@ -666,7 +668,7 @@ const Trap = (() => {
       };
     }
     // тусовка: не раньше 10-го дня и не чаще раза в 5 дней, раньше прочих событий
-    const partyReady = g.day >= PARTY_DAY && g.day - (g.lastParty || 0) >= PARTY_GAP;
+    const partyReady = funReady && g.day >= PARTY_DAY && g.day - (g.lastParty || 0) >= PARTY_GAP;
     if (forceEvent === 'party' || (!forceEvent && partyReady && Math.random() < 0.35)) {
       forceEvent = null;
       g.lastParty = g.day;
