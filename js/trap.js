@@ -537,7 +537,7 @@ const Trap = (() => {
         x: POI[r.bed].x, y: POI[r.bed].y, path: [], act: 'спит', task: 'work',
         plan: { food: true, cigs: true, beer: false, energy: false, meds: false }, ill: null, sched: [], hidden: false, flags: {},
       })),
-      guests: [], cat: null, poops: [], texts: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, lastDoctor: 0, flood: false, doctorToday: false,
+      guests: [], cat: null, poops: [], texts: [], puffs: [], log: [], flags: {}, flagsToday: {}, gf: false, shopCart: null, knock: null, lastParty: 0, lastRap: 0, lastDoctor: 0, flood: false, doctorToday: false,
     };
     simPaused = false;
   }
@@ -899,7 +899,9 @@ const Trap = (() => {
         p.act = it.act;
         p.going = it.leave || null;
       }
-      if (!p.hidden && walk(p, dt) && p.going) {
+      // во время дэба стоит на месте
+      if (p.dabT > 0) p.dabT -= dt;
+      if (!p.hidden && !(p.dabT > 0) && walk(p, dt) && p.going) {
         p.hidden = p.going; p.going = null;
         p.backAt = p.hidden === 'rap' ? 0.82 : 0.55;
         log(p.name + (p.hidden === 'rap' ? ' уехал на «Реп над Волгой»' : ' ушёл в магазин'));
@@ -936,7 +938,16 @@ const Trap = (() => {
       if (at && p.act === 'качается') { p.health = cl(p.health + 36 * dd); p.hunger = cl(p.hunger + 12 * dd); p.happy = cl(p.happy + 8 * dd); }
       if (at && p.act === 'монтаж' && !p.flags.gig) p.happy = cl(p.happy - 5 * dd);
       // Серёжа спасается вейпом и снюсом, если сигарет не дали
-      if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙП'); }
+      if (p.id === 'serezha' && !p.flags.vape && p.crave > 75) { p.flags.vape = true; p.crave = cl(p.crave - 30); say(p, 'ВЕЙПНЕЙШН'); vapor(p); if (!p.hidden) p.dabT = 1.8; }
+      // Дамир иногда стреляет вейп у Серёжи (если тот дома); раз в день решается, стрельнёт или нет
+      if (p.id === 'damir' && !p.flags.vapeTry && p.crave > 75) {
+        p.flags.vapeTry = true;
+        const S = byId('serezha');
+        if (S.alive && !S.away && !S.hidden && Math.random() < 0.5) {
+          p.crave = cl(p.crave - 30); say(p, 'ДАЙ ВЕЙП'); vapor(p);
+          log('Дамир стрельнул вейп у Серёжи');
+        }
+      }
       if (p.ill) {
         p.health = cl(p.health - ILLS[p.ill.type].drain * dd);
         p.happy = cl(p.happy - 5 * dd);
@@ -973,10 +984,17 @@ const Trap = (() => {
     }
 
     for (const tx of g.texts) { tx.y -= 8 * dt; tx.life -= dt; }
+    for (const c of g.puffs) { c.x += c.vx * dt; c.y -= 7 * dt; c.r += 3 * dt; c.life -= dt; }
+    g.puffs = g.puffs.filter(c => c.life > 0);
     g.texts = g.texts.filter(tx => tx.life > 0);
 
     if (!present().length && !game.people.some(p => p.alive)) { gameOver(); return; }
     if (ph >= 1) endDay();
+  }
+
+  // облачко пара от вейпа: несколько клубов поднимаются и тают
+  function vapor(p) {
+    for (let i = 0; i < 5; i++) game.puffs.push({ x: p.x + rnd(-2, 4), y: p.y - 6 - i * 2, vx: rnd(-3, 5), r: 1.5 + i * 0.4, life: 1.6 + i * 0.25, max: 1.6 + i * 0.25 });
   }
 
   function die(p) {
@@ -1219,7 +1237,8 @@ const Trap = (() => {
       if (p.away || p.hidden) continue;
       if (!p.alive) { body(TRSPR[p.id], p.x, p.y); continue; }
       const sleeping = p.act === 'спит' && !p.path.length;
-      figure(TRSPR[p.id], p.x, p.y, p.path.length > 0, p.name.toUpperCase());
+      const dab = p.dabT > 0 && TRSPR[p.id].dab;
+      figure(dab ? { stand: dab, walk: dab } : TRSPR[p.id], p.x, p.y, !dab && p.path.length > 0, p.name.toUpperCase());
       if (sleeping) { ctx.font = '4px "Press Start 2P", monospace'; ctx.fillStyle = '#ffffff'; ctx.fillText('Z', ox + p.x + 5, oy + p.y - 3 - Math.floor(t * 2) % 3); }
       else if (!p.path.length && p.act && p.act !== 'смотрит ТВ') {
         ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -1238,6 +1257,12 @@ const Trap = (() => {
       ctx.save(); ctx.translate(X, Y); if (flip) ctx.scale(-1, 1);
       ctx.drawImage(img, -img.width / 2, 0); ctx.restore();
     }
+    for (const c of g.puffs) {
+      ctx.globalAlpha = Math.max(0, Math.min(0.75, c.life / c.max));
+      ctx.fillStyle = '#eef2f6';
+      ctx.beginPath(); ctx.arc(ox + c.x, oy + c.y, c.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     ctx.font = '4px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     for (const tx of g.texts) {
       ctx.globalAlpha = Math.min(1, tx.life * 2);
@@ -1548,8 +1573,8 @@ const Trap = (() => {
     {
       title: 'ХАРАКТЕРЫ',
       html: () => '<table>' +
-        row(face('serezha') + 'СЕРЁЖА', 'курить хочет сильнее всех, но сам выручает себя вейпом. Иногда залипает в доту или просыпает') +
-        row(face('damir') + 'ДАМИР', 'курит реже всех. Иногда уезжает к родителям и возвращается с едой') +
+        row(face('serezha') + 'СЕРЁЖА', 'курить хочет сильнее всех, но сам выручает себя вейпом — и делает дэб. Иногда залипает в доту или просыпает') +
+        row(face('damir') + 'ДАМИР', 'курит реже всех, а когда совсем приспичит — иногда стреляет вейп у Серёжи. Иногда уезжает к родителям и возвращается с едой') +
         row(face('roma') + 'РОМА', 'готовит лучше всех, но теряет телефон и опаздывает на съёмки') + '</table>' +
         '<p>Смерть друга сильно бьёт по настроению остальных.</p>' +
         '<p>Кнопки вверху: <b>×1 ×2 ×3</b> — скорость, <b>II</b> — пауза, <b>?</b> — это обучение.</p>',

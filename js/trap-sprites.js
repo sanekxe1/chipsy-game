@@ -46,7 +46,7 @@ const TRSPR = {};
     const walk = rows.slice(0, 11).concat(['..pp.pp..', '..oo.oo..']);
     const p = Object.assign({ k: '#1b1626', e: '#1b1626', s: '#f2c8a8', m: '#c9ced6', W: '#e8ecef', o: '#2a2a33', w: '#ffffff' }, pal);
     const stand = makeSprite(rows, p);
-    return { stand, walk: makeSprite(walk, p), dead: gray(stand) };
+    return { stand, walk: makeSprite(walk, p), dead: gray(stand), pal: p };
   }
 
   // бледная серая копия — для тела умершего (ctx.filter не работает в Safari/Telegram на iPhone)
@@ -67,6 +67,13 @@ const TRSPR = {};
   // жильцы
   TRSPR.roma = make('curly', 'glasses', 'teePrint', { h: '#9a6a3e', c: '#d8c49a', r: '#e33b2e', n: '#3f9e4a', p: '#3a3d4a' });
   TRSPR.serezha = make('messy', 'phones', 'shorts', { h: '#3a2618', c: '#4a4e58', p: '#1d1f24', o: '#e8ecef' });
+  // «дэб» Серёжи после вейпа: лицо в сгибе левой руки, правая вытянута по диагонали вверх
+  TRSPR.serezha.dab = makeSprite([
+    '...............s', '..............ss', '.............cs.', '...hhhhh.....c..',
+    '..hhhhhhhh..cc..', '.hhhhhhhhh..c...', '.hhhhhhhsh.cc...', 'cccccccssW.c....',
+    'ccWssssssWcc....', '.c.sssss..c.....', '..ccccccccc.....', '..ccccccc.......',
+    '..ccccccc.......', '..ppppppp.......', '..ww...ww.......', '..oo...oo.......',
+  ], TRSPR.serezha.pal);
   TRSPR.damir = make('bowl', 'ring', 'hoodie', { h: '#8a4a2a', c: '#a9adb5', r: '#e33b2e', p: '#1d1f24', o: '#c9ced6' });
   // гости
   TRSPR.vika = make('long', 'plain', 'skirt', { h: '#d9b07a', c: '#f2ead8', o: '#1d1f24' }, true);
