@@ -43,6 +43,7 @@ const Trap = (() => {
   };
 
   let canvas, ctx, stage, W = 360, S = 2, running = false, raf = 0, t = 0, last = 0, ox = 0, oy = 0;
+  let hudTop = 30;                 // верх карточек жильцов: ниже кнопок «НАЗАД», «?», «×1», «II» (их сдвигают отступы Telegram)
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, oy + y, w, h); };
@@ -61,6 +62,20 @@ const Trap = (() => {
     canvas.height = H * S;
     ox = Math.round((W - PLAN_W) / 2);
     oy = Math.round((H - PLAN_H) / 2) + 2;
+    fitHud();
+  }
+
+  // где кончаются верхние кнопки — в единицах холста; карточки рисуем ниже них
+  function fitHud() {
+    const cv = canvas.getBoundingClientRect(), sc = cv.height / H;
+    if (!sc) return;
+    let bottom = 0;
+    for (const b of document.querySelectorAll('#scr-trap .trap-back, #scr-trap .trap-ctl')) {
+      const r = b.getBoundingClientRect();
+      if (r.height) bottom = Math.max(bottom, (r.bottom - cv.top) / sc);
+    }
+    // две карточки (по ~50) должны поместиться по высоте
+    hudTop = clamp(Math.ceil(bottom) + 3, 30, H - 104);
   }
 
   // ---------------- Полы ----------------
@@ -1254,11 +1269,11 @@ const Trap = (() => {
     const g = game;
     const side = Math.max(4, ox - 92);
     const ps = g.people;
-    card(side, 30, ps[0]);
-    card(side, 82, ps[1]);
-    card(W - side - 84, 30, ps[2]);
+    card(side, hudTop, ps[0]);
+    card(side, hudTop + 52, ps[1]);
+    card(W - side - 84, hudTop, ps[2]);
     // ресурсы
-    const rx = W - side - 84, ry = 82;
+    const rx = W - side - 84, ry = hudTop + 52;
     ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(rx, ry, 84, 46);
     txt('ЗАПАСЫ', rx + 6, ry + 3, 5, '#ffffff');
     const r = g.res;
@@ -1299,6 +1314,7 @@ const Trap = (() => {
     if (!running) return;
     const dt = Math.min(0.05, (ts - last) / 1000 || 0);
     last = ts;
+    if (Math.floor(t) !== Math.floor(t + dt)) fitHud();
     t += dt;
     if (game && game.phase === 'day' && !simPaused && !inUI) updateDay(dt * speed);
     render();
