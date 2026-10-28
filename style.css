@@ -286,7 +286,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .tile { padding: 8px 10px; }
 
 .trap-ctl { position: absolute; top: calc(8px + var(--st)); right: calc(10px + var(--sr)); display: flex; gap: 8px; }
-#scr-trap .overlay { z-index: 2; }
+#scr-trap .overlay { z-index: 2; padding: calc(8px + var(--st)) calc(12px + var(--sr)) calc(8px + var(--sb)) calc(12px + var(--sl)); }
 .panel.xwide { max-width: 760px; max-height: 96%; overflow-y: auto; padding: 10px 12px; }
 .panel.xwide .h2 { margin-bottom: 6px; }
 .stats.one { grid-template-columns: 1fr; }

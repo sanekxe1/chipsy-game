@@ -44,6 +44,7 @@ const Trap = (() => {
 
   let canvas, ctx, stage, W = 360, S = 2, running = false, raf = 0, t = 0, last = 0, ox = 0, oy = 0;
   let hudTop = 30;                 // верх карточек жильцов: ниже кнопок «НАЗАД», «?», «×1», «II» (их сдвигают отступы Telegram)
+  let hudLeft = 0, hudRight = 9999; // боковые границы карточек: не заходить под вырез камеры iPhone (по краям кнопок)
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(ox + x, oy + y, w, h); };
@@ -74,6 +75,11 @@ const Trap = (() => {
       const r = b.getBoundingClientRect();
       if (r.height) bottom = Math.max(bottom, (r.bottom - cv.top) / sc);
     }
+    // кнопки стоят в 10px от безопасной зоны — карточки ставим по тем же краям
+    const back = document.querySelector('#scr-trap .trap-back').getBoundingClientRect();
+    const ctl = document.querySelector('#scr-trap .trap-ctl').getBoundingClientRect();
+    if (back.width) hudLeft = Math.ceil((back.left - cv.left) / sc);
+    if (ctl.width) hudRight = Math.floor((ctl.right - cv.left) / sc);
     // две карточки (по ~50) должны поместиться по высоте
     hudTop = clamp(Math.ceil(bottom) + 3, 30, H - 104);
   }
@@ -1271,12 +1277,13 @@ const Trap = (() => {
   function drawHUD() {
     const g = game;
     const side = Math.max(4, ox - 92);
+    const lx = Math.max(side, hudLeft), rx = Math.min(W - side - 84, hudRight - 84);
     const ps = g.people;
-    card(side, hudTop, ps[0]);
-    card(side, hudTop + 52, ps[1]);
-    card(W - side - 84, hudTop, ps[2]);
+    card(lx, hudTop, ps[0]);
+    card(lx, hudTop + 52, ps[1]);
+    card(rx, hudTop, ps[2]);
     // ресурсы
-    const rx = W - side - 84, ry = hudTop + 52;
+    const ry = hudTop + 52;
     ctx.fillStyle = 'rgba(27,22,38,0.75)'; ctx.fillRect(rx, ry, 84, 46);
     txt('ЗАПАСЫ', rx + 6, ry + 3, 5, '#ffffff');
     const r = g.res;
