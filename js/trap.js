@@ -721,7 +721,7 @@ const Trap = (() => {
     const k = forceEvent || pick(pool);
     forceEvent = null;
     if (k === 'phone') {
-      const cost = priceOf(800);
+      const cost = priceOf(400);
       return {
         title: 'Рома потерял телефон',
         text: 'Опять. Где-то в квартире… или нет.<br>Искать весь день — Рома ничего не сделает и не заработает. Купить новый — −' + cost + '₽. Забить — −40 настроения Роме.',
